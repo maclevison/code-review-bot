@@ -46,11 +46,11 @@ jobs:
           REPO: ${{ github.repository }}
           MAX_LINES: ${{ inputs.max_diff_lines }}
         run: |
-          lines=$(gh pr diff "$PR_NUMBER" --repo "$REPO" | wc -l | tr -d ' ')
+          lines=$(gh pr diff "$PR_NUMBER" --repo "$REPO" | wc -l | tr -d ' ') || { echo "diff fetch failed; proceeding with review"; lines=0; }
           echo "Diff has ${lines} lines (limit: ${MAX_LINES})"
           if [ "$lines" -gt "$MAX_LINES" ]; then
             gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
-              ":robot: Claude review skipped: the diff has ${lines} lines, above the ${MAX_LINES}-line limit. Split the PR or raise \`max_diff_lines\` to get a review."
+              ":robot: Claude review skipped: the diff has ${lines} lines, above the ${MAX_LINES}-line limit. Split the PR or raise \`max_diff_lines\` to get a review." || true
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"

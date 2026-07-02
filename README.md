@@ -31,7 +31,9 @@ workflow file.
 Copy `templates/consumer-workflow.yml` to
 `.github/workflows/code-review.yml` in the target repo and replace
 `OWNER` with the user/org hosting this repo. That's it — the next
-non-draft PR gets reviewed.
+non-draft PR gets reviewed. Note: the repo hosting this workflow must
+be named `code-review-bot`, or you must edit the `code-review-bot`
+path segment in the consumer template to match your repo name.
 
 ## Inputs
 
