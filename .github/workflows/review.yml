@@ -33,6 +33,16 @@ on:
         type: boolean
         required: false
         default: false
+      bot_name:
+        description: "Heading shown at the top of the review comment (Markdown; include an emoji yourself if you want one)"
+        type: string
+        required: false
+        default: ":robot: Automated code review"
+      show_model_footer:
+        description: "Show the '_Model: … advisory_' line under the heading"
+        type: boolean
+        required: false
+        default: true
     secrets:
       OPENROUTER_API_KEY:
         required: true
@@ -63,6 +73,8 @@ jobs:
           EXTRA: ${{ inputs.extra_instructions }}
           GUIDELINES_PATH: ${{ inputs.guidelines_path }}
           REQUIRE_ZDR: ${{ inputs.require_zero_retention }}
+          BOT_NAME: ${{ inputs.bot_name }}
+          SHOW_FOOTER: ${{ inputs.show_model_footer }}
           SYSTEM_PROMPT: |
             You are an automated code reviewer for a GitHub pull request. You
             are given a unified diff. Review it and write ONE markdown comment.
@@ -190,10 +202,12 @@ jobs:
 
           # Post the single advisory review comment.
           {
-            echo "## :robot: Automated code review"
+            echo "## ${BOT_NAME}"
             echo ""
-            echo "_Model: \`${MODEL}\` via OpenRouter — advisory, does not block merge._"
-            echo ""
+            if [ "$SHOW_FOOTER" = "true" ]; then
+              echo "_Model: \`${MODEL}\` via OpenRouter — advisory, does not block merge._"
+              echo ""
+            fi
             printf '%s\n' "$review"
           } > review.md
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file review.md || echo "Failed to post review comment"

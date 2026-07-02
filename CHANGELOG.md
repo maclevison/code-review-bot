@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.5.0 — 2026-07-02
+
+- Customizable comment heading: new `bot_name` input (default
+  `:robot: Automated code review`) sets the H2 title, and
+  `show_model_footer` (default `true`) toggles the `_Model: … advisory_`
+  line. Defaults reproduce the previous output — backward-compatible.
+
 ## v2.4.0 — 2026-07-02
 
 - Added a deterministic self-test (`test/selftest.sh` + `test/mock_openrouter.py`,
