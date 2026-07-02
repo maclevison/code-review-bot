@@ -7,7 +7,7 @@ on:
         description: "Claude model used for the review"
         type: string
         required: false
-        default: "claude-opus-4-8"
+        default: "claude-sonnet-5"
       extra_instructions:
         description: "Extra review instructions appended to the prompt"
         type: string
@@ -67,6 +67,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          track_progress: true
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}

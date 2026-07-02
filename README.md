@@ -39,7 +39,7 @@ path segment in the consumer template to match your repo name.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `model` | string | `claude-opus-4-8` | Claude model used for the review |
+| `model` | string | `claude-sonnet-5` | Claude model used for the review |
 | `extra_instructions` | string | `""` | Extra review instructions appended to the prompt (e.g. project-specific rules) |
 | `max_diff_lines` | number | `5000` | Skip the review when the PR diff exceeds this many lines |
 
@@ -65,8 +65,9 @@ consumer workflow calls the reusable workflow here, which:
 2. Measures the diff; if above `max_diff_lines`, posts a skip comment and
    exits successfully.
 3. Runs `anthropics/claude-code-action@v1` with embedded review
-   guidelines. Claude posts inline comments on relevant lines plus one
-   summary comment.
+   guidelines and `track_progress: true`, so the PR shows a live
+   "in progress" tracking comment while the review runs. Claude posts
+   inline comments on relevant lines plus one summary comment.
 
 Failures (bad API key, timeouts) fail the job with a clear log, but since
 the check is not required, the PR is never blocked.
