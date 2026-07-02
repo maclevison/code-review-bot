@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.0 — 2026-07-02
+
+- Repo-specific review guidelines: the bot now reads
+  `.github/code-review-guidelines.md` (configurable via the new
+  `guidelines_path` input) from the reviewed repo at the PR head commit and
+  appends it to the built-in prompt. Absent file → defaults unchanged.
+- Added `templates/code-review-guidelines.md` as a starting point.
+
 ## v2.0.0 — 2026-07-02
 
 **Breaking:** engine switched from the Claude Code Action to a provider-

@@ -47,6 +47,16 @@ path segment in the consumer template to match your repo name.
 | `base_url` | string | `https://openrouter.ai/api/v1` | OpenAI-compatible base URL; point it at another provider if you prefer |
 | `extra_instructions` | string | `""` | Extra review instructions appended to the system prompt (e.g. project-specific rules) |
 | `max_diff_lines` | number | `5000` | Skip the review when the PR diff exceeds this many lines |
+| `guidelines_path` | string | `.github/code-review-guidelines.md` | Path in the reviewed repo to a Markdown file of repo-specific review norms; appended to the prompt when present |
+
+## Repo-specific review guidelines
+
+Drop a Markdown file at `.github/code-review-guidelines.md` in the repo you
+want reviewed to define what the bot should focus on, what to ignore, the
+severity scale, and the response format. The bot reads it at the PR's head
+commit and appends it to its built-in prompt — the baseline still applies,
+your file refines it. Copy `templates/code-review-guidelines.md` as a
+starting point. No file → the bot uses its defaults.
 
 ## Secrets
 

@@ -1,6 +1,8 @@
 # Copy this file to .github/workflows/code-review.yml in your repo.
 # Replace OWNER with the user/org hosting code-review-bot.
 # Requires an OPENROUTER_API_KEY secret in this repo (or the org).
+# Optional: add .github/code-review-guidelines.md to this repo to define
+# repo-specific review norms (see the code-review-bot README).
 name: Code Review
 
 on:

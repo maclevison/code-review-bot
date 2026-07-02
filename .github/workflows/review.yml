@@ -23,6 +23,11 @@ on:
         type: number
         required: false
         default: 5000
+      guidelines_path:
+        description: "Path (in the reviewed repo) to a Markdown file of repo-specific review guidelines; appended to the prompt when present"
+        type: string
+        required: false
+        default: ".github/code-review-guidelines.md"
     secrets:
       OPENROUTER_API_KEY:
         required: true
@@ -46,10 +51,12 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MODEL: ${{ inputs.model }}
           BASE_URL: ${{ inputs.base_url }}
           MAX_LINES: ${{ inputs.max_diff_lines }}
           EXTRA: ${{ inputs.extra_instructions }}
+          GUIDELINES_PATH: ${{ inputs.guidelines_path }}
           SYSTEM_PROMPT: |
             You are an automated code reviewer for a GitHub pull request. You
             are given a unified diff. Review it and write ONE markdown comment.
@@ -95,8 +102,19 @@ jobs:
             exit 0
           fi
 
-          # Assemble the system prompt (+ optional project instructions).
+          # Assemble the system prompt: baseline + repo-local guidelines
+          # (optional, read at the PR head commit) + inline extra instructions.
           system="$SYSTEM_PROMPT"
+
+          guidelines=$(gh api "repos/${REPO}/contents/${GUIDELINES_PATH}?ref=${HEAD_SHA}" \
+            -H "Accept: application/vnd.github.raw" 2>/dev/null) || guidelines=""
+          if [ -n "$guidelines" ]; then
+            echo "Loaded repo review guidelines from ${GUIDELINES_PATH}"
+            system="${system}"$'\n\nRepository-specific review guidelines (authored by the repo maintainers — follow them; they refine the rules above):\n'"${guidelines}"
+          else
+            echo "No repo guidelines at ${GUIDELINES_PATH}; using defaults."
+          fi
+
           if [ -n "$EXTRA" ]; then
             system="${system}"$'\n\nAdditional project-specific instructions:\n'"${EXTRA}"
           fi

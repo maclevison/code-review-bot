@@ -1,0 +1,46 @@
+<!--
+Copy this file into the repo you want reviewed, at:
+    .github/code-review-guidelines.md
+(or point the `guidelines_path` input elsewhere).
+
+The code-review bot reads it at the PR's head commit and appends it to its
+built-in review prompt. The built-in baseline (bugs/logic, quality,
+performance; advisory tone; English; one summary comment citing file:line)
+still applies — this file refines and adds to it. Delete the guidance you
+don't need and edit the rest. Everything here is instructions to the model,
+so write it as directions, not prose.
+-->
+
+# Code review guidelines
+
+## Project context
+<!-- One or two lines so the reviewer knows the stack and what matters. -->
+- Stack: <e.g. Nuxt 3 + Nitro API, PostgreSQL, multi-tenant SaaS>.
+- Critical invariant: <e.g. every DB query must be scoped by tenant_id>.
+
+## Pay extra attention to
+<!-- The things a generic reviewer would miss. Be specific. -->
+- Tenant isolation: flag any query, cache key, or route that isn't scoped
+  to the current tenant.
+- Auth: flag missing authorization checks on new endpoints.
+- Money/dates: flag unrounded currency math or naive timezone handling.
+
+## Do not flag
+<!-- Cut the noise so findings stay high-signal. -->
+- Formatting/style already enforced by Prettier/ESLint.
+- Missing tests for trivial or generated code.
+- Subjective naming preferences.
+
+## Severity
+<!-- How you want findings ranked. -->
+- **Blocker:** data loss, security hole, breaks a critical invariant above.
+- **Warning:** likely bug, missing edge case, notable perf issue.
+- **Nit:** minor; prefix with "nit:" and keep to at most a few.
+
+## Response format
+<!-- How the single summary comment should be structured. -->
+- Start with a one-line verdict: `Looks good` / `Needs attention` / `Blockers found`.
+- Then group findings under **Blockers**, **Warnings**, **Nits**.
+- Each finding: `path:line` + what's wrong + the suggested change, one line each.
+- End with a one-line summary of what the change does well (max one sentence).
+- If there is nothing to raise, output only the one-line verdict.
