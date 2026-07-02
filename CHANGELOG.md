@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.4.0 — 2026-07-02
+
+- Added a deterministic self-test (`test/selftest.sh` + `test/mock_openrouter.py`,
+  run by `.github/workflows/selftest.yml`): exercises the review pipeline —
+  request building, response parsing, and graceful degradation on non-JSON
+  and empty responses — against a mock endpoint, with no real API call or
+  token cost. Repo-internal only; does not change the reusable workflow.
+
 ## v2.3.0 — 2026-07-02
 
 - New `require_zero_retention` input (OpenRouter): routes only to providers
