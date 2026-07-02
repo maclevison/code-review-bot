@@ -1,11 +1,14 @@
 # code-review-bot
 
-Automated, advisory code review for pull requests, powered by Claude
-(`anthropics/claude-code-action`). Adopt in any repo with one small
-workflow file.
+Automated, advisory code review for pull requests, powered by any
+OpenAI-compatible model through [OpenRouter](https://openrouter.ai/).
+Adopt in any repo with one small workflow file.
 
 - **Advisory:** the bot comments; humans decide. It never blocks merges —
   do not add the review job to branch protection required checks.
+- **Cheap:** a single model call per PR posts one summary comment. Default
+  model `deepseek/deepseek-v4-flash-20260423` costs a fraction of a cent
+  per review; swap in any OpenRouter model via the `model` input.
 - **Focus:** bugs/logic, quality/maintainability, performance. Security is
   flagged only when a severe issue is obvious in the diff.
 - **Language:** review comments are in English.
@@ -15,12 +18,13 @@ workflow file.
 
 ## One-time setup (per org or account)
 
-1. Get an Anthropic API key: <https://console.anthropic.com/>.
-2. Store it as a secret named `ANTHROPIC_API_KEY`:
-   - **Organization:** `gh secret set ANTHROPIC_API_KEY --org YOUR_ORG --visibility all`
+1. Get an OpenRouter API key: <https://openrouter.ai/keys>. Add credit to
+   your OpenRouter account.
+2. Store it as a secret named `OPENROUTER_API_KEY`:
+   - **Organization:** `gh secret set OPENROUTER_API_KEY --org YOUR_ORG --visibility all`
      (repos then receive it via `secrets: inherit`).
    - **Personal account:** set it per repo:
-     `gh secret set ANTHROPIC_API_KEY --repo YOUR_USER/YOUR_REPO`.
+     `gh secret set OPENROUTER_API_KEY --repo YOUR_USER/YOUR_REPO`.
 3. This repo must be callable by consumers:
    - Public repo: works as-is.
    - Private/internal repo in an org: Settings → Actions → General →
@@ -39,22 +43,23 @@ path segment in the consumer template to match your repo name.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `model` | string | `claude-sonnet-5` | Claude model used for the review |
-| `extra_instructions` | string | `""` | Extra review instructions appended to the prompt (e.g. project-specific rules) |
+| `model` | string | `deepseek/deepseek-v4-flash-20260423` | Any OpenRouter model id (e.g. `moonshotai/kimi-k2.7-code-20260612`, `z-ai/glm-5.2`, `google/gemini-3.5-flash`) |
+| `base_url` | string | `https://openrouter.ai/api/v1` | OpenAI-compatible base URL; point it at another provider if you prefer |
+| `extra_instructions` | string | `""` | Extra review instructions appended to the system prompt (e.g. project-specific rules) |
 | `max_diff_lines` | number | `5000` | Skip the review when the PR diff exceeds this many lines |
 
 ## Secrets
 
 | Secret | Required | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | yes | Anthropic API key; provided via `secrets: inherit` from the org/repo secret |
+| `OPENROUTER_API_KEY` | yes | OpenRouter API key; provided via `secrets: inherit` from the org/repo secret |
 
 ## Versioning
 
-Consumers pin `@v1`. Semantic tags (`v1.0.0`, `v1.1.0`, …) are cut per
-release and the floating `v1` tag moves to the latest compatible release.
-Breaking changes ship as `v2`; existing consumers are unaffected until
-they opt in.
+Consumers pin `@v2`. Semantic tags (`v2.0.0`, `v2.1.0`, …) are cut per
+release and the floating `v2` tag moves to the latest compatible release.
+Breaking changes ship as a new major tag; existing consumers are
+unaffected until they opt in. (`v1` was the Claude-based engine.)
 
 ## How it works
 
@@ -62,12 +67,13 @@ On `pull_request` (opened, synchronize, reopened, ready_for_review), the
 consumer workflow calls the reusable workflow here, which:
 
 1. Skips draft PRs and cancels superseded runs for the same PR.
-2. Measures the diff; if above `max_diff_lines`, posts a skip comment and
-   exits successfully.
-3. Runs `anthropics/claude-code-action@v1` with embedded review
-   guidelines and `track_progress: true`, so the PR shows a live
-   "in progress" tracking comment while the review runs. Claude posts
-   inline comments on relevant lines plus one summary comment.
+2. Fetches the PR diff via the GitHub API (no checkout needed). If the
+   diff is above `max_diff_lines`, posts a skip comment and exits
+   successfully.
+3. Sends the diff in a single request to the configured OpenRouter model
+   with an embedded review prompt, then posts the model's response as one
+   advisory summary comment on the PR.
 
-Failures (bad API key, timeouts) fail the job with a clear log, but since
-the check is not required, the PR is never blocked.
+If the provider returns an error (bad key, no credit) or an empty
+response, the job posts a short "review unavailable" comment and exits
+successfully — it never fails the check or blocks the PR.

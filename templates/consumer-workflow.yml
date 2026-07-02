@@ -1,5 +1,6 @@
 # Copy this file to .github/workflows/code-review.yml in your repo.
 # Replace OWNER with the user/org hosting code-review-bot.
+# Requires an OPENROUTER_API_KEY secret in this repo (or the org).
 name: Code Review
 
 on:
@@ -11,13 +12,10 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      issues: write
-      id-token: write
-      actions: read
-    uses: OWNER/code-review-bot/.github/workflows/claude-review.yml@v1
+    uses: OWNER/code-review-bot/.github/workflows/review.yml@v2
     secrets: inherit
     # Optional overrides:
     # with:
-    #   model: claude-sonnet-5
+    #   model: moonshotai/kimi-k2.7-code-20260612
     #   extra_instructions: "Pay extra attention to database migrations."
     #   max_diff_lines: 8000

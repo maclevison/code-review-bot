@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.0.0 — 2026-07-02
+
+**Breaking:** engine switched from the Claude Code Action to a provider-
+agnostic single-shot review via OpenRouter (much cheaper per PR).
+
+- Reusable workflow renamed `claude-review.yml` → `review.yml`; consumers
+  pin `@v2` and call `.../review.yml@v2`.
+- Secret renamed `ANTHROPIC_API_KEY` → `OPENROUTER_API_KEY`.
+- New/changed inputs: `model` now an OpenRouter model id
+  (default `deepseek/deepseek-v4-flash-20260423`), new `base_url`
+  (default `https://openrouter.ai/api/v1`).
+- One API call per PR posts a single advisory summary comment (no more
+  agentic multi-turn run, no inline comments). Draft skip, superseded-run
+  cancellation, and the `max_diff_lines` guard are retained.
+- Provider errors / empty responses post a short "review unavailable"
+  comment and exit successfully instead of failing the check.
+
 ## v1.1.0 — 2026-07-02
 
 - Default `model` changed from `claude-opus-4-8` to `claude-sonnet-5`
