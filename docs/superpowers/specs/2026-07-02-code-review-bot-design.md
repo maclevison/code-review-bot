@@ -69,7 +69,7 @@ jobs:
 
 - `concurrency: pr-review-${{ github.event.pull_request.number }}` with `cancel-in-progress: true` — a new push cancels an in-flight review of the same PR.
 - Draft PRs never trigger a review.
-- Optional inputs for path filtering and a max-diff-size guard for very large PRs.
+- A max-diff-size guard input for very large PRs. Path filtering needs no dedicated input: consumers use native `on.pull_request.paths` in their own workflow.
 - `permissions: contents: read, pull-requests: write` — least privilege.
 
 ## Components
