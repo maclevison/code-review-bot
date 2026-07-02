@@ -26,7 +26,6 @@ A central repository (working name `code-review-bot`) hosts a **reusable workflo
 ```
 org/code-review-bot                        ← central repo (this project)
 ├── .github/workflows/claude-review.yml    ← reusable workflow (the engine)
-├── prompts/review-guidelines.md           ← what/how to review
 ├── templates/consumer-workflow.yml        ← copy-paste snippet for adopting repos
 ├── README.md                              ← setup + adoption guide
 └── CHANGELOG.md                           ← release notes
@@ -62,7 +61,7 @@ jobs:
 1. PR opened/updated (`opened`, `synchronize`, `reopened`, `ready_for_review`) in a consumer repo. Draft PRs are skipped.
 2. Consumer workflow calls the reusable workflow at `@v1` with `secrets: inherit`.
 3. Reusable workflow checks out the PR head.
-4. `anthropics/claude-code-action` runs with the PR diff plus `prompts/review-guidelines.md` as instruction.
+4. `anthropics/claude-code-action` runs with the PR diff plus the review guidelines embedded in the reusable workflow's prompt. (Guidelines live inline in the YAML rather than a separate file: at runtime the checkout is of the *consumer* repo, so reading a file from the central repo would require cross-repo access — public repo or an extra PAT. Inline avoids that dependency.)
 5. Claude posts inline comments on relevant hunks plus one summary comment on the PR.
 6. Job completes. It is **not** a required status check, so it can never block merge.
 
@@ -77,8 +76,8 @@ jobs:
 
 | Component | Responsibility |
 |---|---|
-| `claude-review.yml` (reusable workflow) | The engine. Accepts optional inputs (`model`, `focus`/extra instructions, path filters, max diff size), runs the action, injects review guidelines |
-| `prompts/review-guidelines.md` | Reviewer instruction: focus on bugs/logic, quality/maintainability, performance; comment in English; advisory tone; prioritize meaningful findings over nitpicks; cite `file:line`; skip praise-only comments |
+| `claude-review.yml` (reusable workflow) | The engine. Accepts optional inputs (`model`, `extra_instructions`, max diff size), runs the action, embeds the review guidelines in its prompt |
+| Review guidelines (inline in `claude-review.yml`) | Reviewer instruction: focus on bugs/logic, quality/maintainability, performance; comment in English; advisory tone; prioritize meaningful findings over nitpicks; cite `file:line`; skip praise-only comments |
 | `templates/consumer-workflow.yml` | Copy-paste onboarding snippet |
 | `README.md` | How to create the org secret, adopt in a repo, customize inputs |
 
