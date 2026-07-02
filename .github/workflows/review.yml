@@ -37,7 +37,7 @@ on:
         description: "Heading shown at the top of the review comment (Markdown; include an emoji yourself if you want one)"
         type: string
         required: false
-        default: ":robot: Automated code review"
+        default: "🤖 Kimo Reviewer"
       show_model_footer:
         description: "Show the '_Model: … advisory_' line under the heading"
         type: boolean

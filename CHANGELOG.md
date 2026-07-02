@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.6.0 — 2026-07-02
+
+- Default `bot_name` is now `🤖 Kimo Reviewer` (was
+  `:robot: Automated code review`). Repos that set their own `bot_name`
+  are unaffected.
+
 ## v2.5.0 — 2026-07-02
 
 - Customizable comment heading: new `bot_name` input (default
