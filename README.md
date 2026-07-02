@@ -48,6 +48,7 @@ path segment in the consumer template to match your repo name.
 | `extra_instructions` | string | `""` | Extra review instructions appended to the system prompt (e.g. project-specific rules) |
 | `max_diff_lines` | number | `5000` | Skip the review when the PR diff exceeds this many lines |
 | `guidelines_path` | string | `.github/code-review-guidelines.md` | Path in the reviewed repo to a Markdown file of repo-specific review norms; appended to the prompt when present |
+| `require_zero_retention` | boolean | `false` | OpenRouter only: route only to providers that do not retain data (`provider.data_collection=deny`). Leave `false` for non-OpenRouter `base_url`. |
 
 ## Repo-specific review guidelines
 
@@ -63,6 +64,31 @@ starting point. No file → the bot uses its defaults.
 | Secret | Required | Description |
 |---|---|---|
 | `OPENROUTER_API_KEY` | yes | OpenRouter API key; provided via `secrets: inherit` from the org/repo secret |
+
+## Data handling & providers
+
+The bot sends the PR diff to whatever endpoint `base_url` points at. Because
+it speaks the OpenAI-compatible protocol, you are not tied to OpenRouter —
+point it at whatever your security team approves:
+
+- **OpenRouter (default)** — set `require_zero_retention: true` to route only
+  to providers that don't retain data.
+- **Azure OpenAI** — `base_url` to your Azure endpoint; the deployment name
+  is the `model`.
+- **AWS Bedrock** — via an OpenAI-compatible gateway (e.g. LiteLLM / Bedrock
+  Access Gateway) in your own VPC.
+- **Self-hosted** — vLLM, Ollama, or LiteLLM inside your network, so code
+  never leaves your infrastructure.
+
+The `OPENROUTER_API_KEY` secret is just the bearer token for `base_url` —
+name aside, it carries whatever provider's key you configure. Only the diff
+is sent; the bot never uploads the full repository.
+
+## Observability
+
+Each run writes a token-usage table (and cost, when the provider reports it)
+to the GitHub Actions **job summary**, so spend is visible per PR without
+extra tooling.
 
 ## Versioning
 

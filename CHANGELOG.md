@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.3.0 — 2026-07-02
+
+- New `require_zero_retention` input (OpenRouter): routes only to providers
+  that do not retain data (`provider.data_collection=deny`). Default
+  `false` — no change to existing behavior.
+- Observability: token usage (and cost when reported) is written to the
+  GitHub Actions job summary on every run.
+- README: added a "Data handling & providers" section (Azure OpenAI,
+  Bedrock, self-hosted vLLM/Ollama/LiteLLM via `base_url`).
+
+All additions are backward-compatible; consumers on `@v2` need no changes.
+
 ## v2.2.0 — 2026-07-02
 
 - Default `model` changed from `deepseek/deepseek-v4-flash-20260423` to
