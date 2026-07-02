@@ -42,7 +42,7 @@ on:
         description: "Show the '_Model: … advisory_' line under the heading"
         type: boolean
         required: false
-        default: true
+        default: false
     secrets:
       OPENROUTER_API_KEY:
         required: true

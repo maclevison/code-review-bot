@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.7.0 — 2026-07-02
+
+- Default `show_model_footer` is now `false` — the `_Model: … advisory_`
+  line is hidden unless a repo opts back in with `show_model_footer: true`.
+
 ## v2.6.0 — 2026-07-02
 
 - Default `bot_name` is now `🤖 Kimo Reviewer` (was

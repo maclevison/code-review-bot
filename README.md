@@ -50,7 +50,7 @@ path segment in the consumer template to match your repo name.
 | `guidelines_path` | string | `.github/code-review-guidelines.md` | Path in the reviewed repo to a Markdown file of repo-specific review norms; appended to the prompt when present |
 | `require_zero_retention` | boolean | `false` | OpenRouter only: route only to providers that do not retain data (`provider.data_collection=deny`). Leave `false` for non-OpenRouter `base_url`. |
 | `bot_name` | string | `🤖 Kimo Reviewer` | Heading at the top of the review comment (Markdown; include your own emoji if you want one) |
-| `show_model_footer` | boolean | `true` | Show the `_Model: … advisory_` line under the heading |
+| `show_model_footer` | boolean | `false` | Show the `_Model: … advisory_` line under the heading |
 
 ## Repo-specific review guidelines
 
