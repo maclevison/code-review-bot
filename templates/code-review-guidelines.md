@@ -43,4 +43,6 @@ so write it as directions, not prose.
 - Then group findings under **Blockers**, **Warnings**, **Nits**.
 - Each finding: `path:line` + what's wrong + the suggested change, one line each.
 - End with a one-line summary of what the change does well (max one sentence).
-- If there is nothing to raise, output only the one-line verdict.
+- Even when there is nothing to flag, do NOT output the bare verdict alone —
+  add one line naming what you checked (e.g. "verified tenant scoping, no
+  N+1, inputs validated"), so a clean review still shows the review happened.

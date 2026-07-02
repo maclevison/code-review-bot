@@ -46,7 +46,8 @@ run_core() {
     --arg system "$SYSTEM" \
     --arg user "$DIFF" \
     --argjson zdr false \
-    '{model: $model, messages: [
+    --argjson mt 8000 \
+    '{model: $model, max_tokens: $mt, messages: [
        {role: "system", content: $system},
        {role: "user", content: ("Review this pull request diff:\n\n" + $user)}
      ]}

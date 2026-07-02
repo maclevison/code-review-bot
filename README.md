@@ -51,6 +51,7 @@ path segment in the consumer template to match your repo name.
 | `require_zero_retention` | boolean | `false` | OpenRouter only: route only to providers that do not retain data (`provider.data_collection=deny`). Leave `false` for non-OpenRouter `base_url`. |
 | `bot_name` | string | `🤖 Kimo Reviewer` | Heading at the top of the review comment (Markdown; include your own emoji if you want one) |
 | `show_model_footer` | boolean | `false` | Show the `_Model: … advisory_` line under the heading |
+| `max_tokens` | number | `8000` | Max completion tokens for the reply. Reasoning models spend tokens thinking; too low a cap truncates the review (`finish_reason=length` → empty). |
 
 ## Repo-specific review guidelines
 

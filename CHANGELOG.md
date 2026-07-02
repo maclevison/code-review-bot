@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.8.0 — 2026-07-02
+
+- New `max_tokens` input (default `8000`) sent in the request, so reasoning
+  models don't starve the reply and truncate it to empty content.
+- `finish_reason` is now logged and shown in the usage table; a
+  `finish_reason=length` warning is surfaced in the log and folded into the
+  "review unavailable" comment when it causes an empty reply.
+- Template `code-review-guidelines.md`: clean reviews now name what was
+  checked instead of printing a bare verdict.
+
 ## v2.7.0 — 2026-07-02
 
 - Default `show_model_footer` is now `false` — the `_Model: … advisory_`

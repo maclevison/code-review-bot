@@ -43,6 +43,11 @@ on:
         type: boolean
         required: false
         default: false
+      max_tokens:
+        description: "Max completion tokens for the model reply. Set generously — reasoning models spend tokens thinking, and too low a cap truncates the review (finish_reason=length -> empty content)."
+        type: number
+        required: false
+        default: 8000
     secrets:
       OPENROUTER_API_KEY:
         required: true
@@ -75,6 +80,7 @@ jobs:
           REQUIRE_ZDR: ${{ inputs.require_zero_retention }}
           BOT_NAME: ${{ inputs.bot_name }}
           SHOW_FOOTER: ${{ inputs.show_model_footer }}
+          MAX_TOKENS: ${{ inputs.max_tokens }}
           SYSTEM_PROMPT: |
             You are an automated code reviewer for a GitHub pull request. You
             are given a unified diff. Review it and write ONE markdown comment.
@@ -146,7 +152,8 @@ jobs:
             --arg system "$system" \
             --arg user "$diff" \
             --argjson zdr "${REQUIRE_ZDR:-false}" \
-            '{model: $model, messages: [
+            --argjson mt "${MAX_TOKENS:-8000}" \
+            '{model: $model, max_tokens: $mt, messages: [
                {role: "system", content: $system},
                {role: "user", content: ("Review this pull request diff:\n\n" + $user)}
              ]}
@@ -179,19 +186,27 @@ jobs:
           ctok=$(printf '%s' "$resp" | jq -r '.usage.completion_tokens // "?"')
           ttok=$(printf '%s' "$resp" | jq -r '.usage.total_tokens // "?"')
           cost=$(printf '%s' "$resp" | jq -r '.usage.cost // empty')
-          echo "Usage — prompt:${ptok} completion:${ctok} total:${ttok} cost:${cost:-n/a}"
+          finish=$(printf '%s' "$resp" | jq -r '.choices[0].finish_reason // "?"')
+          echo "Usage — prompt:${ptok} completion:${ctok} total:${ttok} cost:${cost:-n/a} finish_reason:${finish}"
+          if [ "$finish" = "length" ]; then
+            echo "WARNING: finish_reason=length — the reply hit max_tokens (${MAX_TOKENS}). The review may be truncated or empty; raise max_tokens or use a non-reasoning model."
+          fi
           {
             echo "### :robot: Code review — usage"
             echo ""
-            echo "| Model | Prompt | Completion | Total | Cost (USD) |"
-            echo "|---|---|---|---|---|"
-            echo "| \`${MODEL}\` | ${ptok} | ${ctok} | ${ttok} | ${cost:-n/a} |"
+            echo "| Model | Prompt | Completion | Total | Cost (USD) | Finish |"
+            echo "|---|---|---|---|---|---|"
+            echo "| \`${MODEL}\` | ${ptok} | ${ctok} | ${ttok} | ${cost:-n/a} | ${finish} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ -z "$review" ]; then
-            echo "No review content in response: $resp"
+            echo "No review content in response (finish_reason=${finish}): $resp"
+            hint=""
+            if [ "$finish" = "length" ]; then
+              hint=" (finish_reason=length — the reply hit max_tokens=${MAX_TOKENS}; raise max_tokens or use a non-reasoning model)"
+            fi
             gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
-              ":robot: Code review unavailable: the model returned an empty response." || true
+              ":robot: Code review unavailable: the model returned an empty response.${hint}" || true
             exit 0
           fi
 
