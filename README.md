@@ -7,8 +7,8 @@ Adopt in any repo with one small workflow file.
 - **Advisory:** the bot comments; humans decide. It never blocks merges —
   do not add the review job to branch protection required checks.
 - **Cheap:** a single model call per PR posts one summary comment. Default
-  model `deepseek/deepseek-v4-flash-20260423` costs a fraction of a cent
-  per review; swap in any OpenRouter model via the `model` input.
+  model `moonshotai/kimi-k2.7-code-20260612` is code-specialized and still
+  inexpensive; swap in any OpenRouter model via the `model` input.
 - **Focus:** bugs/logic, quality/maintainability, performance. Security is
   flagged only when a severe issue is obvious in the diff.
 - **Language:** review comments are in English.
@@ -43,7 +43,7 @@ path segment in the consumer template to match your repo name.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `model` | string | `deepseek/deepseek-v4-flash-20260423` | Any OpenRouter model id (e.g. `moonshotai/kimi-k2.7-code-20260612`, `z-ai/glm-5.2`, `google/gemini-3.5-flash`) |
+| `model` | string | `moonshotai/kimi-k2.7-code-20260612` | Any OpenRouter model id (e.g. `deepseek/deepseek-v4-flash-20260423`, `z-ai/glm-5.2`, `google/gemini-3.5-flash`) |
 | `base_url` | string | `https://openrouter.ai/api/v1` | OpenAI-compatible base URL; point it at another provider if you prefer |
 | `extra_instructions` | string | `""` | Extra review instructions appended to the system prompt (e.g. project-specific rules) |
 | `max_diff_lines` | number | `5000` | Skip the review when the PR diff exceeds this many lines |

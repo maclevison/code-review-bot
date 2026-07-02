@@ -7,7 +7,7 @@ on:
         description: "OpenRouter model id used for the review"
         type: string
         required: false
-        default: "deepseek/deepseek-v4-flash-20260423"
+        default: "moonshotai/kimi-k2.7-code-20260612"
       base_url:
         description: "OpenAI-compatible base URL (OpenRouter by default)"
         type: string

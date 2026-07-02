@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.2.0 — 2026-07-02
+
+- Default `model` changed from `deepseek/deepseek-v4-flash-20260423` to
+  `moonshotai/kimi-k2.7-code-20260612` (code-specialized). Override via the
+  `model` input.
+
 ## v2.1.0 — 2026-07-02
 
 - Repo-specific review guidelines: the bot now reads
