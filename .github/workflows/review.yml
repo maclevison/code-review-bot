@@ -1,0 +1,153 @@
+name: Code Review
+
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: "OpenRouter model id used for the review"
+        type: string
+        required: false
+        default: "deepseek/deepseek-v4-flash-20260423"
+      base_url:
+        description: "OpenAI-compatible base URL (OpenRouter by default)"
+        type: string
+        required: false
+        default: "https://openrouter.ai/api/v1"
+      extra_instructions:
+        description: "Extra review instructions appended to the system prompt"
+        type: string
+        required: false
+        default: ""
+      max_diff_lines:
+        description: "Skip the review when the PR diff exceeds this many lines"
+        type: number
+        required: false
+        default: 5000
+    secrets:
+      OPENROUTER_API_KEY:
+        required: true
+
+jobs:
+  review:
+    # Never review drafts. Advisory by design: this job must not be made a
+    # required status check.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    concurrency:
+      group: code-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Review PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          MODEL: ${{ inputs.model }}
+          BASE_URL: ${{ inputs.base_url }}
+          MAX_LINES: ${{ inputs.max_diff_lines }}
+          EXTRA: ${{ inputs.extra_instructions }}
+          SYSTEM_PROMPT: |
+            You are an automated code reviewer for a GitHub pull request. You
+            are given a unified diff. Review it and write ONE markdown comment.
+
+            Focus, in priority order:
+            1. Bugs and logic errors — edge cases, null/undefined handling,
+               incorrect conditions, off-by-one errors, race conditions.
+            2. Quality and maintainability — naming, duplication, complexity,
+               missing tests for changed behavior.
+            3. Performance — N+1 queries, expensive loops, unnecessary
+               allocations, blocking calls.
+
+            Rules:
+            - Write in English. Advisory tone — you never block the merge.
+            - Prioritize meaningful findings over nitpicks. Do NOT restate the
+              diff or post praise-only text.
+            - For each finding cite `path:line` using the new-file line numbers
+              from the diff.
+            - Structure: a one-line overall summary, then findings grouped by
+              severity (Bug / Quality / Performance). If nothing is worth
+              raising, say the changes look good in one line.
+            - Keep it concise. Output GitHub-flavored markdown only — no
+              preamble such as "Here is the review".
+        run: |
+          set -euo pipefail
+
+          # Fetch the PR diff via the API (no checkout needed).
+          diff=$(gh pr diff "$PR_NUMBER" --repo "$REPO") || {
+            echo "Failed to fetch diff; nothing to review."
+            exit 0
+          }
+
+          if [ -z "$diff" ]; then
+            echo "Empty diff; nothing to review."
+            exit 0
+          fi
+
+          lines=$(printf '%s' "$diff" | wc -l | tr -d ' ') || lines=0
+          echo "Diff has ${lines} lines (limit: ${MAX_LINES})"
+          if [ "$lines" -gt "$MAX_LINES" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
+              ":robot: Code review skipped: the diff has ${lines} lines, above the ${MAX_LINES}-line limit. Split the PR or raise \`max_diff_lines\`." || true
+            exit 0
+          fi
+
+          # Assemble the system prompt (+ optional project instructions).
+          system="$SYSTEM_PROMPT"
+          if [ -n "$EXTRA" ]; then
+            system="${system}"$'\n\nAdditional project-specific instructions:\n'"${EXTRA}"
+          fi
+
+          # Build the request body with jq so the diff is safely JSON-encoded.
+          payload=$(jq -n \
+            --arg model "$MODEL" \
+            --arg system "$system" \
+            --arg user "$diff" \
+            '{model: $model, messages: [
+               {role: "system", content: $system},
+               {role: "user", content: ("Review this pull request diff:\n\n" + $user)}
+             ]}')
+
+          # Call the OpenAI-compatible endpoint (OpenRouter by default).
+          resp=$(curl -sS --fail-with-body -X POST "${BASE_URL}/chat/completions" \
+            -H "Authorization: Bearer ${OPENROUTER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "HTTP-Referer: https://github.com/${REPO}" \
+            -H "X-Title: code-review-bot" \
+            -d "$payload") || {
+              echo "Provider request failed. Response: ${resp:-<none>}"
+              gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
+                ":robot: Code review unavailable: the model provider returned an error (check the OPENROUTER_API_KEY secret and your credit balance)." || true
+              exit 0
+            }
+
+          review=$(printf '%s' "$resp" | jq -r '.choices[0].message.content // empty') || {
+            echo "Malformed (non-JSON) provider response: $resp"
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
+              ":robot: Code review unavailable: the model provider returned an unexpected response." || true
+            exit 0
+          }
+          if [ -z "$review" ]; then
+            echo "No review content in response: $resp"
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
+              ":robot: Code review unavailable: the model returned an empty response." || true
+            exit 0
+          fi
+
+          # GitHub caps comment bodies at 65536 chars; truncate defensively.
+          if [ "${#review}" -gt 60000 ]; then
+            review="${review:0:60000}"$'\n\n_review truncated to fit the GitHub comment size limit._'
+          fi
+
+          # Post the single advisory review comment.
+          {
+            echo "## :robot: Automated code review"
+            echo ""
+            echo "_Model: \`${MODEL}\` via OpenRouter — advisory, does not block merge._"
+            echo ""
+            printf '%s\n' "$review"
+          } > review.md
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file review.md || echo "Failed to post review comment"
