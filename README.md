@@ -295,6 +295,6 @@ opt in. (`v1` was the Claude-based engine.)
 
 **Every PR, read once before a human even looks.**
 
-[Get started](#-get-started-in-5-minutes) · [See the pitch](docs/PITCH.md) · [Changelog](CHANGELOG.md)
+[Get started](#-get-started-in-5-minutes) · [Changelog](CHANGELOG.md)
 
 </div>
