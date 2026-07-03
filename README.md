@@ -1,45 +1,165 @@
-# code-review-bot
+<div align="center">
 
-Automated, advisory code review for pull requests, powered by any
-OpenAI-compatible model through [OpenRouter](https://openrouter.ai/).
-Adopt in any repo with one small workflow file.
+# 🤖 code-review-bot
 
-- **Advisory:** the bot comments; humans decide. It never blocks merges —
-  do not add the review job to branch protection required checks.
-- **Cheap:** a single model call per PR posts one summary comment. Default
-  model `moonshotai/kimi-k2.7-code-20260612` is code-specialized and still
-  inexpensive; swap in any OpenRouter model via the `model` input.
-- **Focus:** bugs/logic, quality/maintainability, performance. Security is
-  flagged only when a severe issue is obvious in the diff.
-- **Language:** review comments are in English.
-- **Cost controls:** drafts are skipped, superseded runs are cancelled on
-  new pushes, and diffs above `max_diff_lines` (default 5000) are skipped
-  with an explanatory comment.
+### AI code review on every pull request — for cents, in one workflow file.
 
-## One-time setup (per org or account)
+An advisory reviewer that reads your diff, comments on the bugs, and gets out of the way.
+It **never blocks a merge**. It just makes every PR a little safer.
 
-1. Get an OpenRouter API key: <https://openrouter.ai/keys>. Add credit to
-   your OpenRouter account.
-2. Store it as a secret named `OPENROUTER_API_KEY`:
-   - **Organization:** `gh secret set OPENROUTER_API_KEY --org YOUR_ORG --visibility all`
-     (repos then receive it via `secrets: inherit`).
-   - **Personal account:** set it per repo:
-     `gh secret set OPENROUTER_API_KEY --repo YOUR_USER/YOUR_REPO`.
-3. This repo must be callable by consumers:
-   - Public repo: works as-is.
-   - Private/internal repo in an org: Settings → Actions → General →
-     Access → "Accessible from repositories in the organization".
+**Drop-in · Provider-agnostic · No servers · Yours in 5 minutes**
 
-## Adopt in a repo
+```yaml
+# .github/workflows/code-review.yml — that's the whole integration
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+jobs:
+  review:
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: OWNER/code-review-bot/.github/workflows/review.yml@v2
+    secrets: inherit
+```
 
-Copy `templates/consumer-workflow.yml` to
-`.github/workflows/code-review.yml` in the target repo and replace
-`OWNER` with the user/org hosting this repo. That's it — the next
-non-draft PR gets reviewed. Note: the repo hosting this workflow must
-be named `code-review-bot`, or you must edit the `code-review-bot`
-path segment in the consumer template to match your repo name.
+[Get started](#-get-started-in-5-minutes) · [Why teams adopt it](#why-teams-adopt-it) · [Features](#everything-you-get) · [Security](#your-code-your-endpoint) · [Config](#configuration-reference)
 
-## Inputs
+</div>
+
+---
+
+## The problem you already have
+
+Human review is the bottleneck. PRs sit waiting for a reviewer. When someone
+finally looks, they skim a 900-line diff under time pressure — and the boring
+defects slip through:
+
+- missing tenant scoping on a query
+- an unhandled edge case
+- an N+1 that ships to prod
+- validation that was quietly forgotten
+
+Review depth swings by reviewer, by team, by how tired everyone is on Friday.
+
+## The fix: a tireless first-pass reviewer
+
+`code-review-bot` reads **every** non-draft PR the moment it opens, and posts
+**one** clear comment grouped by severity, citing `file:line`. Bugs & logic,
+maintainability, performance. Your reviewers walk into a diff that's already
+been read once.
+
+It's **advisory by design** — it comments, humans decide. No merge gate, no
+false-positive standoffs, no adoption friction. That's the whole trick: because
+it can't block you, nobody fights it, so everybody keeps it on.
+
+> **Don't** add the review job to branch-protection required checks. Advisory means advisory.
+
+---
+
+## Why teams adopt it
+
+| | |
+|---|---|
+| 💸 **Cents per PR** | One model call per PR — not an agent loop. Diff in, short review out. Token usage & cost land in the job summary, so spend is never a mystery. |
+| 🔌 **One file to adopt** | Copy a ~10-line workflow into a repo. Next PR gets reviewed. No app to install, no server to run, no webhook to babysit. |
+| 🏢 **Central config, org-wide** | One reusable workflow sets the default model, prompt, and version. Repos pin `@v2` and get patches automatically. |
+| 🔒 **Your code, your endpoint** | Speaks the OpenAI protocol — point it at OpenRouter, Azure, Bedrock, or a self-hosted model so code never leaves your network. |
+| 📏 **Your standards, enforced** | Drop a guidelines file in the repo; the bot enforces your invariants ("every query must be tenant-scoped") consistently, on every PR. |
+| 🛟 **Fails safe, always** | Bad key, no credit, empty reply, oversized diff — it posts a short note and exits green. It never breaks your CI. |
+
+---
+
+## Everything you get
+
+- **Severity-grouped findings** citing `file:line` — bugs/logic, quality/maintainability, performance. Security flagged when a severe issue is obvious in the diff.
+- **Repo-specific guidelines** — a `.github/code-review-guidelines.md` refines the built-in prompt with your team's rules, focus areas, severity scale, and format.
+- **Built-in cost controls** — drafts skipped, superseded runs cancelled on new pushes, diffs over `max_diff_lines` (default 5000) skipped with an explanatory comment.
+- **Per-PR observability** — a token-usage table (and cost, when the provider reports it) written to the GitHub Actions **job summary**.
+- **Any model, one line** — swap `moonshotai/kimi-k2.7-code-20260612` for any OpenRouter id, or any OpenAI-compatible endpoint, without touching the workflow.
+- **Least-privilege** — `contents: read`, `pull-requests: write`. Only the diff is sent, never the whole repo.
+- **Tunable reviewer voice** — set the comment heading (`bot_name`), toggle the model footer, cap `max_tokens` and `reasoning_effort` for thinking models.
+
+---
+
+## 🚀 Get started in 5 minutes
+
+### 1. One-time setup (per org or account)
+
+Get an OpenRouter API key at <https://openrouter.ai/keys> and add credit. Then
+store it as a secret named `OPENROUTER_API_KEY`:
+
+```bash
+# Organization (repos inherit it via `secrets: inherit`)
+gh secret set OPENROUTER_API_KEY --org YOUR_ORG --visibility all
+
+# …or per personal repo
+gh secret set OPENROUTER_API_KEY --repo YOUR_USER/YOUR_REPO
+```
+
+Make this repo callable by consumers:
+- **Public repo:** works as-is.
+- **Private/internal in an org:** Settings → Actions → General → Access →
+  "Accessible from repositories in the organization".
+
+### 2. Adopt in any repo
+
+Copy `templates/consumer-workflow.yml` to `.github/workflows/code-review.yml`
+in the target repo and replace `OWNER` with the user/org hosting this repo.
+That's it — the next non-draft PR gets reviewed.
+
+> The host repo must be named `code-review-bot`, or edit the `code-review-bot`
+> path segment in the consumer template to match your repo name.
+
+### 3. (Optional) Teach it your standards
+
+Drop `.github/code-review-guidelines.md` in the reviewed repo to define what to
+focus on, what to ignore, the severity scale, and the response format. The bot
+reads it at the PR's head commit and appends it to its prompt — the baseline
+still applies, your file refines it. Copy `templates/code-review-guidelines.md`
+to start. No file → the bot uses its defaults.
+
+---
+
+## How it works
+
+On `pull_request` (opened, synchronize, reopened, ready_for_review), the
+consumer workflow calls the reusable workflow here, which:
+
+1. Skips draft PRs and cancels superseded runs for the same PR.
+2. Fetches the PR diff via the GitHub API (no checkout needed). If the diff
+   exceeds `max_diff_lines`, posts a skip comment and exits successfully.
+3. Sends the diff in a single request to the configured model with an embedded
+   review prompt, then posts the response as one advisory summary comment.
+
+If the provider errors (bad key, no credit) or returns an empty response, the
+job posts a short "review unavailable" comment and exits successfully — it
+never fails the check or blocks the PR.
+
+---
+
+## Your code, your endpoint
+
+The decisive question for any company: *where does our code go?*
+
+Because the bot speaks the **OpenAI-compatible** protocol, `base_url` can point
+at whatever Security approves:
+
+- **OpenRouter (default)** — set `require_zero_retention: true` to route only to
+  providers that don't retain data.
+- **Azure OpenAI** — `base_url` to your Azure endpoint; the deployment name is the `model`.
+- **AWS Bedrock** — via an OpenAI-compatible gateway (LiteLLM / Bedrock Access Gateway) in your own VPC.
+- **Self-hosted** — vLLM, Ollama, or LiteLLM inside your network, so code never leaves your infrastructure.
+
+The `OPENROUTER_API_KEY` secret is just the bearer token for `base_url` — name
+aside, it carries whatever provider's key you configure. **Only the diff is
+sent; the bot never uploads the full repository.**
+
+---
+
+## Configuration reference
+
+### Inputs
 
 | Input | Type | Default | Description |
 |---|---|---|---|
@@ -54,66 +174,33 @@ path segment in the consumer template to match your repo name.
 | `max_tokens` | number | `8000` | Max completion tokens for the reply. Reasoning models spend tokens thinking; too low a cap truncates the review (`finish_reason=length` → empty). |
 | `reasoning_effort` | string | `low` | OpenRouter reasoning effort for thinking models (`low`/`medium`/`high`). `low` stops a reasoning model from spending its whole token budget thinking and leaving the review empty. Set `''` to omit. |
 
-## Repo-specific review guidelines
-
-Drop a Markdown file at `.github/code-review-guidelines.md` in the repo you
-want reviewed to define what the bot should focus on, what to ignore, the
-severity scale, and the response format. The bot reads it at the PR's head
-commit and appends it to its built-in prompt — the baseline still applies,
-your file refines it. Copy `templates/code-review-guidelines.md` as a
-starting point. No file → the bot uses its defaults.
-
-## Secrets
+### Secrets
 
 | Secret | Required | Description |
 |---|---|---|
 | `OPENROUTER_API_KEY` | yes | OpenRouter API key; provided via `secrets: inherit` from the org/repo secret |
 
-## Data handling & providers
+### Versioning
 
-The bot sends the PR diff to whatever endpoint `base_url` points at. Because
-it speaks the OpenAI-compatible protocol, you are not tied to OpenRouter —
-point it at whatever your security team approves:
+Consumers pin `@v2`. Semantic tags (`v2.0.0`, `v2.1.0`, …) are cut per release
+and the floating `v2` tag moves to the latest compatible release. Breaking
+changes ship as a new major tag; existing consumers are unaffected until they
+opt in. (`v1` was the Claude-based engine.)
 
-- **OpenRouter (default)** — set `require_zero_retention: true` to route only
-  to providers that don't retain data.
-- **Azure OpenAI** — `base_url` to your Azure endpoint; the deployment name
-  is the `model`.
-- **AWS Bedrock** — via an OpenAI-compatible gateway (e.g. LiteLLM / Bedrock
-  Access Gateway) in your own VPC.
-- **Self-hosted** — vLLM, Ollama, or LiteLLM inside your network, so code
-  never leaves your infrastructure.
+---
 
-The `OPENROUTER_API_KEY` secret is just the bearer token for `base_url` —
-name aside, it carries whatever provider's key you configure. Only the diff
-is sent; the bot never uploads the full repository.
+## What it is *not*
 
-## Observability
+- **Not a merge gate.** Advisory by design — keep it out of required checks.
+- **Not a replacement** for human review, static analysis, or CI tests — it complements all three.
+- **Not a data-exfiltration risk** when pointed at an approved / in-VPC endpoint.
 
-Each run writes a token-usage table (and cost, when the provider reports it)
-to the GitHub Actions **job summary**, so spend is visible per PR without
-extra tooling.
+---
 
-## Versioning
+<div align="center">
 
-Consumers pin `@v2`. Semantic tags (`v2.0.0`, `v2.1.0`, …) are cut per
-release and the floating `v2` tag moves to the latest compatible release.
-Breaking changes ship as a new major tag; existing consumers are
-unaffected until they opt in. (`v1` was the Claude-based engine.)
+**Every PR, read once before a human even looks. For cents.**
 
-## How it works
+[Get started](#-get-started-in-5-minutes) · [See the pitch](docs/PITCH.md) · [Changelog](CHANGELOG.md)
 
-On `pull_request` (opened, synchronize, reopened, ready_for_review), the
-consumer workflow calls the reusable workflow here, which:
-
-1. Skips draft PRs and cancels superseded runs for the same PR.
-2. Fetches the PR diff via the GitHub API (no checkout needed). If the
-   diff is above `max_diff_lines`, posts a skip comment and exits
-   successfully.
-3. Sends the diff in a single request to the configured OpenRouter model
-   with an embedded review prompt, then posts the model's response as one
-   advisory summary comment on the PR.
-
-If the provider returns an error (bad key, no credit) or an empty
-response, the job posts a short "review unavailable" comment and exits
-successfully — it never fails the check or blocks the PR.
+</div>
