@@ -119,14 +119,16 @@ jobs:
             - Write in English. Advisory tone — you never block the merge.
             - Prioritize meaningful findings over nitpicks. Do NOT restate the
               diff or post praise-only text.
-            - Structure: OPEN with a one-line tally like `🔴 2 · 🟡 3 · 🟣 1`,
-              or `No blocking issues` when there are no 🔴/🟣. Then list each
-              finding prefixed with its severity marker and citing `path:line`
-              (new-file line numbers). A clean review still names what was
-              checked: output `No blocking issues` plus one line of what was
-              verified.
+            - Structure: OPEN with a one-line tally in WORDS, not emoji, like
+              `2 important · 3 nits · 1 pre-existing`, or `No blocking issues`
+              when there are no important/pre-existing findings. Use the 🔴/🟡/🟣
+              emoji ONLY as the prefix of each individual finding below the tally
+              — never in the tally line (the tally must contain no emoji). Cite
+              `path:line` (new-file line numbers) on each finding. A clean review
+              still names what was checked: output `No blocking issues` plus one
+              line of what was verified.
             - Nit cap: list at most 5 🟡 Nit findings inline; if there are more,
-              append "plus N similar nits" to the tally instead of listing them.
+              add "plus N similar nits" to the summary instead of listing them.
             - Pre-existing: if a clear bug shows in the surrounding diff context
               but this PR did not introduce it, tag it 🟣 and do not count it
               against the change.
@@ -244,6 +246,14 @@ jobs:
 
           if [ "$notable_signal" = "true" ]; then
             system="${system}"$'\n\nPR signals: '"${signals}"$' (weight your review accordingly)'
+          fi
+
+          # Conditional security addendum: only when the diff touches auth- or
+          # DB-sensitive paths (counted by the triage step above). Zero extra
+          # tokens on ordinary PRs. Vars default to 0 so this stays safe under
+          # set -u.
+          if [ "${auth_paths:-0}" -gt 0 ] || [ "${db_paths:-0}" -gt 0 ]; then
+            system="${system}"$'\n\nThis PR touches security-sensitive code. Additionally scrutinize:\n- SQL/NoSQL injection: unparameterized queries, string-built SQL.\n- Broken authorization / IDOR: missing ownership or tenant checks on records.\n- Authentication gaps: unprotected new endpoints, weak token/session handling.\n- XSS / output encoding: untrusted data rendered without escaping.\n- Secrets/PII: hardcoded credentials, secrets or PII in logs or errors.\n- Unsafe input: missing validation, path traversal, SSRF, command injection.'
           fi
 
           # Build the request body with jq so the diff is safely JSON-encoded.
