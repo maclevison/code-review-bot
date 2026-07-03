@@ -36,5 +36,3 @@ jobs:
     # spend-capped key so a leaked/abused key can't run up cost.
     secrets:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-    with:
-      show_model_footer: true

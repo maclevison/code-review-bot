@@ -39,7 +39,7 @@ on:
         required: false
         default: "👁 Panoptes"
       show_model_footer:
-        description: "Show the '_Model: … advisory_' line under the heading"
+        description: "Show the '_Model: … advisory_' line as a footer at the foot of the comment (off by default)"
         type: boolean
         required: false
         default: false
@@ -392,10 +392,10 @@ jobs:
           {
             echo "## ${BOT_NAME}"
             echo ""
-            if [ "$SHOW_FOOTER" = "true" ]; then
-              echo "_Model: \`${MODEL}\` via OpenRouter — advisory, does not block merge._"
-              echo ""
-            fi
             printf '%s\n' "$review"
+            if [ "$SHOW_FOOTER" = "true" ]; then
+              echo ""
+              echo "_Model: \`${MODEL}\` via OpenRouter — advisory, does not block merge._"
+            fi
           } > review.md
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file review.md || echo "Failed to post review comment"
