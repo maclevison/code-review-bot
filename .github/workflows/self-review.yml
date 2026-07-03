@@ -1,0 +1,28 @@
+# Dogfood — panoptes reviews its OWN pull requests with its own reviewer.
+#
+# This is the end-to-end self-test: every PR here is reviewed by the exact
+# reusable workflow shipped to consumers (see templates/consumer-workflow.yml),
+# except it calls the workflow LOCALLY (`uses: ./…`) instead of by @tag, so a
+# PR always exercises the reviewer as changed in that same PR.
+#
+# Requires an OPENROUTER_API_KEY secret on this repo (or its org). Without it,
+# the reviewer degrades gracefully and posts an "unavailable" comment.
+#
+# Advisory by design: do NOT add this job to branch-protection required checks.
+# Fork PRs get a read-only token and no secrets, so the review is skipped/
+# unavailable on external contributions — that is expected.
+name: Self Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  review:
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/review.yml
+    secrets: inherit
+    with:
+      show_model_footer: true

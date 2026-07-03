@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.11.1 — 2026-07-03
+
+- **Dogfood: panoptes now self-reviews its own PRs.** Added
+  `.github/workflows/self-review.yml`, which calls the reusable `review.yml`
+  locally (`uses: ./…`) on every pull request — an end-to-end self-test that
+  exercises the reviewer as changed in the same PR, complementing the offline
+  `selftest.yml` mock. Repo-internal only; no change to the consumer-facing
+  reusable workflow. Requires an `OPENROUTER_API_KEY` secret on the repo/org;
+  without it the review degrades to an "unavailable" comment.
+
 ## v2.11.0 — 2026-07-03
 
 - Rebrand to **Panoptes** (the hundred-eyed watchman). Default `bot_name` is now
