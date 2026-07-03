@@ -197,6 +197,12 @@ opt in. (`v1` was the Claude-based engine.)
 
 ---
 
+## License
+
+[MIT](LICENSE) © 2026 Mac Silva.
+
+---
+
 <div align="center">
 
 **Every PR, read once before a human even looks. For cents.**
