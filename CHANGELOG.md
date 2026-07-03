@@ -14,12 +14,13 @@
   locally (`uses: ./…`) on every pull request — an end-to-end self-test that
   exercises the reviewer as changed in the same PR, complementing the offline
   `selftest.yml` mock. Repo-internal only; no change to the consumer-facing
-  reusable workflow. Requires an `OPENROUTER_API_KEY` secret on the repo/org —
-  it is declared `required`, so the call hard-fails if the secret is absent
-  (an invalid/empty key, by contrast, degrades to an "unavailable" comment).
-  The secret is passed explicitly (not `secrets: inherit`); use a spend-capped
-  OpenRouter key, since a same-repo branch that edits `review.yml` runs its own
-  version with that key — an inherent dogfood tradeoff.
+  reusable workflow. Requires an `OPENROUTER_API_KEY` secret on the repo/org;
+  it is passed explicitly (not `secrets: inherit`), so a missing secret
+  resolves to an empty string and the review degrades to an "unavailable"
+  comment rather than hard-failing. Fork PRs are skipped (no secret, read-only
+  token). Use a spend-capped OpenRouter key, since a same-repo branch that
+  edits `review.yml` runs its own version with that key — an inherent dogfood
+  tradeoff.
 
 ## v2.11.0 — 2026-07-03
 
