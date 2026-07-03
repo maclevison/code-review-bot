@@ -2,6 +2,13 @@
 
 ## v2.11.1 — 2026-07-03
 
+- **Fix empty reviews on the default model — raise default `max_tokens`
+  8000 → 16000.** The default model (`moonshotai/kimi-k2.7-code`) is a
+  reasoning model; its thinking tokens share the completion budget, so 8000
+  could be fully spent on reasoning and leave no written review
+  (`finish_reason=length`, empty content). Doubling the default gives the
+  review room. Cost per review rises accordingly; override `max_tokens` (or
+  use a non-reasoning model) to tune.
 - **Dogfood: panoptes now self-reviews its own PRs.** Added
   `.github/workflows/self-review.yml`, which calls the reusable `review.yml`
   locally (`uses: ./…`) on every pull request — an end-to-end self-test that
