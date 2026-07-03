@@ -9,6 +9,23 @@ performance; advisory tone; English; one summary comment citing file:line)
 still applies — this file refines and adds to it. Delete the guidance you
 don't need and edit the rest. Everything here is instructions to the model,
 so write it as directions, not prose.
+
+Higher-priority alternative — REVIEW.md:
+    Instead of (or in addition to) this file, you can drop a `REVIEW.md` at the
+    repo root. Following the Claude Code Review convention, REVIEW.md is treated
+    as HIGHEST-PRIORITY review-only instructions: injected verbatim and
+    overriding the built-in defaults (and this guidelines file) when they
+    conflict. Both files are loaded independently at the PR head commit —
+    either, both, or neither may exist. Use REVIEW.md for hard rules you always
+    want honored; use this guidelines file for softer, additive refinements.
+
+Severity markers:
+    When you want the bot's severity tally (the `Findings:` line and the
+    machine-readable `review-severity` marker in the job summary) to reflect
+    your findings, have the review mark each one with these exact emoji:
+        🔴  important
+        🟡  nit
+        🟣  pre_existing
 -->
 
 # Code review guidelines

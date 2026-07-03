@@ -167,6 +167,20 @@ jobs:
             echo "No repo guidelines at ${GUIDELINES_PATH}; using defaults."
           fi
 
+          # Also honor a repo-root REVIEW.md (Claude Code Review convention):
+          # a review-only guidelines file injected verbatim as HIGHEST-PRIORITY
+          # instructions that override the defaults above. Loaded independently
+          # of GUIDELINES_PATH — either, both, or neither may exist. Guarded so a
+          # missing file never aborts under `set -euo pipefail`.
+          review_md=$(gh api "repos/${REPO}/contents/REVIEW.md?ref=${HEAD_SHA}" \
+            -H "Accept: application/vnd.github.raw" 2>/dev/null) || review_md=""
+          if [ -n "$review_md" ]; then
+            echo "Loaded repo-root REVIEW.md (highest-priority review instructions)"
+            system="${system}"$'\n\nHIGHEST-PRIORITY review-only instructions (from the repository\'s REVIEW.md — injected verbatim; these override any defaults or guidelines above when they conflict):\n'"${review_md}"
+          else
+            echo "No REVIEW.md at repo root."
+          fi
+
           if [ -n "$EXTRA" ]; then
             system="${system}"$'\n\nAdditional project-specific instructions:\n'"${EXTRA}"
           fi
@@ -288,6 +302,27 @@ jobs:
             echo "| Model | Prompt | Completion | Total | Cost (USD) | Finish |"
             echo "|---|---|---|---|---|---|"
             echo "| \`${MODEL}\` | ${ptok} | ${ctok} | ${ttok} | ${cost:-n/a} | ${finish} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Severity tally: count the review's severity markers (shared
+          # convention: 🔴 important, 🟡 nit, 🟣 pre_existing). grep -o returns 1
+          # on no match under `set -e`, so guard every count with `|| true`.
+          # Emit a machine-readable marker so teams can OPT IN to CI gating —
+          # the bot itself never fails the job (advisory by design).
+          n_important=$(printf '%s' "$review" | grep -o '🔴' | wc -l | tr -d ' ') || n_important=0
+          n_nit=$(printf '%s' "$review" | grep -o '🟡' | wc -l | tr -d ' ') || n_nit=0
+          n_pre=$(printf '%s' "$review" | grep -o '🟣' | wc -l | tr -d ' ') || n_pre=0
+          : "${n_important:=0}" "${n_nit:=0}" "${n_pre:=0}"
+          severity_json=$(jq -n \
+            --argjson important "$n_important" \
+            --argjson nit "$n_nit" \
+            --argjson pre_existing "$n_pre" \
+            '{important: $important, nit: $nit, pre_existing: $pre_existing}' -c) || severity_json='{"important":0,"nit":0,"pre_existing":0}'
+          {
+            echo ""
+            echo "Findings: 🔴 ${n_important} · 🟡 ${n_nit} · 🟣 ${n_pre}"
+            echo ""
+            echo "<!-- review-severity: ${severity_json} -->"
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ -z "$review" ]; then

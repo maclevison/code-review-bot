@@ -76,8 +76,9 @@ it can't block you, nobody fights it, so everybody keeps it on.
 
 - **Severity-grouped findings** citing `file:line` — bugs/logic, quality/maintainability, performance. Security flagged when a severe issue is obvious in the diff.
 - **Repo-specific guidelines** — a `.github/code-review-guidelines.md` refines the built-in prompt with your team's rules, focus areas, severity scale, and format.
+- **`REVIEW.md` override** — a repo-root `REVIEW.md` (Claude Code Review convention) is injected verbatim as **highest-priority**, review-only instructions that override the defaults and the guidelines file. Loaded independently; use either, both, or neither.
 - **Built-in cost controls** — drafts skipped, superseded runs cancelled on new pushes, diffs over `max_diff_lines` (default 5000) skipped with an explanatory comment.
-- **Per-PR observability** — a token-usage table (and cost, when the provider reports it) written to the GitHub Actions **job summary**.
+- **Per-PR observability** — a token-usage table (and cost, when the provider reports it) written to the GitHub Actions **job summary**, plus a severity tally and a machine-readable `review-severity` marker for **opt-in** CI gating (see below).
 - **Any model, one line** — swap `moonshotai/kimi-k2.7-code-20260612` for any OpenRouter id, or any OpenAI-compatible endpoint, without touching the workflow.
 - **Least-privilege** — `contents: read`, `pull-requests: write`. Only the diff is sent, never the whole repo.
 - **Tunable reviewer voice** — set the comment heading (`bot_name`), toggle the model footer, cap `max_tokens` and `reasoning_effort` for thinking models.
@@ -120,6 +121,35 @@ focus on, what to ignore, the severity scale, and the response format. The bot
 reads it at the PR's head commit and appends it to its prompt — the baseline
 still applies, your file refines it. Copy `templates/code-review-guidelines.md`
 to start. No file → the bot uses its defaults.
+
+For **hard rules you always want honored**, drop a `REVIEW.md` at the repo root
+instead. Following the Claude Code Review convention, it's injected verbatim as
+highest-priority, review-only instructions that override both the defaults and
+the guidelines file when they conflict. Both files load independently at the PR
+head commit — either, both, or neither may exist.
+
+### 4. (Optional) Opt in to severity gating
+
+The bot stays **advisory** — it never fails your CI. But it writes a
+machine-readable severity tally to the job summary so *you* can choose to gate:
+
+```
+Findings: 🔴 2 · 🟡 1 · 🟣 3
+<!-- review-severity: {"important":2,"nit":1,"pre_existing":3} -->
+```
+
+The counts come from the severity markers in the review body (`🔴` important,
+`🟡` nit, `🟣` pre_existing). A separate job in *your* workflow can read the
+marker and decide whether to block — a one-liner over the step summary:
+
+```bash
+# In a later step/job: parse the marker and fail only on important findings.
+important=$(grep -o 'review-severity: {[^}]*}' "$GITHUB_STEP_SUMMARY" \
+  | sed 's/review-severity: //' | jq '.important')
+[ "${important:-0}" -eq 0 ] || { echo "::error::$important important finding(s)"; exit 1; }
+```
+
+Gating is entirely your call; the review job itself always exits green.
 
 ---
 
