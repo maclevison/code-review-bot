@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Panoptes">
+  <rect width="256" height="256" rx="56" fill="#0F1116"/>
+  <g fill="#F5F5F5">
+    <!-- three eyes in a downward triangle: a legible 'many-eyed watcher' at any size -->
+    <!-- eye A (top-left) -->
+    <path d="M71 104 Q98 85 125 104 Q98 123 71 104 Z"/>
+    <circle cx="98" cy="104" r="9" fill="#0F1116"/>
+    <!-- eye B (top-right) -->
+    <path d="M131 104 Q158 85 185 104 Q158 123 131 104 Z"/>
+    <circle cx="158" cy="104" r="9" fill="#0F1116"/>
+    <!-- eye C (bottom-center) -->
+    <path d="M101 160 Q128 141 155 160 Q128 179 101 160 Z"/>
+    <circle cx="128" cy="160" r="9" fill="#0F1116"/>
+  </g>
+</svg>

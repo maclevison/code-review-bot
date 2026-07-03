@@ -1,10 +1,13 @@
 <div align="center">
 
-# 🤖 code-review-bot
+<img src="assets/panoptes-hero.png" alt="Panoptes — the hundred-eyed code reviewer" width="260">
+
+# Panoptes
 
 ### AI code review on every pull request — for cents, in one workflow file.
 
-An advisory reviewer that reads your diff, comments on the bugs, and gets out of the way.
+Named for the hundred-eyed watchman of myth — an advisory reviewer that reads
+your diff, comments on the bugs, and gets out of the way.
 It **never blocks a merge**. It just makes every PR a little safer.
 
 **Drop-in · Provider-agnostic · No servers · Yours in 5 minutes**
