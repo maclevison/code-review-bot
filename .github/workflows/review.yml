@@ -196,7 +196,7 @@ jobs:
 
           db_paths=$(printf '%s' "$changed_paths" | grep -Eic 'migrations|migrate|schema\.(sql|prisma)|alembic' || true)
           auth_paths=$(printf '%s' "$changed_paths" | grep -Eic 'auth|login|session|token|password|crypto|secret|permission|rbac|acl' || true)
-          test_paths=$(printf '%s' "$changed_paths" | grep -Eic 'test|spec|__tests__|[.]test[.]|[.]spec[.]' || true)
+          test_paths=$(printf '%s' "$changed_paths" | grep -Eic '(^|/)(tests?|specs?|__tests__)/|[._-](test|spec)[._-]|[.](test|spec)[.]' || true)
           source_paths=$(printf '%s' "$changed_paths" | grep -Eic '\.(c|cc|cpp|cs|go|java|js|jsx|ts|tsx|py|rb|rs|php|swift|kt|kts|m|mm|scala|sh|bash|zsh|sql|prisma|vue|svelte)$|(^|/)(src|lib|app|packages|services|cmd|internal)/' || true)
           config_paths=$(printf '%s' "$changed_paths" | grep -Eic '[.]github/|Dockerfile|[.]env|config|[.]ya?ml$' || true)
 
