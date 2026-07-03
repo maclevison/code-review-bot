@@ -230,7 +230,7 @@ sent; the bot never uploads the full repository.**
 | `max_diff_lines` | number | `5000` | Skip the review when the PR diff exceeds this many lines |
 | `guidelines_path` | string | `.github/code-review-guidelines.md` | Path in the reviewed repo to a Markdown file of repo-specific review norms; appended to the prompt when present |
 | `require_zero_retention` | boolean | `false` | OpenRouter only: route only to providers that do not retain data (`provider.data_collection=deny`). Leave `false` for non-OpenRouter `base_url`. |
-| `bot_name` | string | `🤖 Kimo Reviewer` | Heading at the top of the review comment (Markdown; include your own emoji if you want one) |
+| `bot_name` | string | `👁 Panoptes` | Heading at the top of the review comment (Markdown; include your own emoji if you want one) |
 | `show_model_footer` | boolean | `false` | Show the `_Model: … advisory_` line under the heading |
 | `max_tokens` | number | `8000` | Max completion tokens for the reply. Reasoning models spend tokens thinking; too low a cap truncates the review (`finish_reason=length` → empty). |
 | `reasoning_effort` | string | `low` | OpenRouter reasoning effort for thinking models (`low`/`medium`/`high`). `low` stops a reasoning model from spending its whole token budget thinking and leaving the review empty. Set `''` to omit. |
