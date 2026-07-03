@@ -52,6 +52,7 @@ path segment in the consumer template to match your repo name.
 | `bot_name` | string | `🤖 Kimo Reviewer` | Heading at the top of the review comment (Markdown; include your own emoji if you want one) |
 | `show_model_footer` | boolean | `false` | Show the `_Model: … advisory_` line under the heading |
 | `max_tokens` | number | `8000` | Max completion tokens for the reply. Reasoning models spend tokens thinking; too low a cap truncates the review (`finish_reason=length` → empty). |
+| `reasoning_effort` | string | `low` | OpenRouter reasoning effort for thinking models (`low`/`medium`/`high`). `low` stops a reasoning model from spending its whole token budget thinking and leaving the review empty. Set `''` to omit. |
 
 ## Repo-specific review guidelines
 

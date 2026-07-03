@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.9.0 — 2026-07-03
+
+- New `reasoning_effort` input (default `low`): caps how much a thinking
+  model (e.g. Kimi) spends reasoning, so it stops burning the whole
+  `max_tokens` budget on thought and returning empty content
+  (`finish_reason=length`). Also lowers cost. Set `''` to omit the param.
+
+  Root cause fix for the `:robot: Code review unavailable … finish_reason=length`
+  comments seen on large PRs with a reasoning model.
+
 ## v2.8.0 — 2026-07-02
 
 - New `max_tokens` input (default `8000`) sent in the request, so reasoning

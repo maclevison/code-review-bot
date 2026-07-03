@@ -48,6 +48,11 @@ on:
         type: number
         required: false
         default: 8000
+      reasoning_effort:
+        description: "OpenRouter reasoning effort for thinking models (low|medium|high). 'low' keeps a reasoning model from spending its whole token budget thinking and leaving the review empty. Set to '' (empty) to omit the reasoning parameter."
+        type: string
+        required: false
+        default: "low"
     secrets:
       OPENROUTER_API_KEY:
         required: true
@@ -81,6 +86,7 @@ jobs:
           BOT_NAME: ${{ inputs.bot_name }}
           SHOW_FOOTER: ${{ inputs.show_model_footer }}
           MAX_TOKENS: ${{ inputs.max_tokens }}
+          REASONING_EFFORT: ${{ inputs.reasoning_effort }}
           SYSTEM_PROMPT: |
             You are an automated code reviewer for a GitHub pull request. You
             are given a unified diff. Review it and write ONE markdown comment.
@@ -153,11 +159,13 @@ jobs:
             --arg user "$diff" \
             --argjson zdr "${REQUIRE_ZDR:-false}" \
             --argjson mt "${MAX_TOKENS:-8000}" \
+            --arg reasoning "${REASONING_EFFORT:-}" \
             '{model: $model, max_tokens: $mt, messages: [
                {role: "system", content: $system},
                {role: "user", content: ("Review this pull request diff:\n\n" + $user)}
              ]}
-             + (if $zdr then {provider: {data_collection: "deny"}} else {} end)')
+             + (if $zdr then {provider: {data_collection: "deny"}} else {} end)
+             + (if $reasoning != "" then {reasoning: {effort: $reasoning}} else {} end)')
 
           # Call the OpenAI-compatible endpoint (OpenRouter by default).
           resp=$(curl -sS --fail-with-body -X POST "${BASE_URL}/chat/completions" \
