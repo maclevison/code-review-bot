@@ -109,15 +109,27 @@ jobs:
             3. Performance — N+1 queries, expensive loops, unnecessary
                allocations, blocking calls.
 
+            Severity markers (use these exactly):
+            - 🔴 Important — a bug that should be fixed before merging.
+            - 🟡 Nit — minor issue, worth fixing but not blocking.
+            - 🟣 Pre-existing — a bug visible in the diff context but NOT
+              introduced by this PR.
+
             Rules:
             - Write in English. Advisory tone — you never block the merge.
             - Prioritize meaningful findings over nitpicks. Do NOT restate the
               diff or post praise-only text.
-            - For each finding cite `path:line` using the new-file line numbers
-              from the diff.
-            - Structure: a one-line overall summary, then findings grouped by
-              severity (Bug / Quality / Performance). If nothing is worth
-              raising, say the changes look good in one line.
+            - Structure: OPEN with a one-line tally like `🔴 2 · 🟡 3 · 🟣 1`,
+              or `No blocking issues` when there are no 🔴/🟣. Then list each
+              finding prefixed with its severity marker and citing `path:line`
+              (new-file line numbers). A clean review still names what was
+              checked: output `No blocking issues` plus one line of what was
+              verified.
+            - Nit cap: list at most 5 🟡 Nit findings inline; if there are more,
+              append "plus N similar nits" to the tally instead of listing them.
+            - Pre-existing: if a clear bug shows in the surrounding diff context
+              but this PR did not introduce it, tag it 🟣 and do not count it
+              against the change.
             - Keep it concise. Output GitHub-flavored markdown only — no
               preamble such as "Here is the review".
         run: |
