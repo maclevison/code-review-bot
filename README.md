@@ -11,6 +11,10 @@ It **never blocks a merge**. It just makes every PR a little safer.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+[Get started](#-get-started-in-5-minutes) · [Why teams adopt it](#why-teams-adopt-it) · [Features](#everything-you-get) · [Security](#your-code-your-endpoint) · [Config](#configuration-reference)
+
+</div>
+
 ```yaml
 # .github/workflows/code-review.yml — that's the whole integration
 on:
@@ -24,10 +28,6 @@ jobs:
     uses: OWNER/code-review-bot/.github/workflows/review.yml@v2
     secrets: inherit
 ```
-
-[Get started](#-get-started-in-5-minutes) · [Why teams adopt it](#why-teams-adopt-it) · [Features](#everything-you-get) · [Security](#your-code-your-endpoint) · [Config](#configuration-reference)
-
-</div>
 
 ---
 
@@ -74,11 +74,15 @@ it can't block you, nobody fights it, so everybody keeps it on.
 
 ## Everything you get
 
-- **Severity-grouped findings** citing `file:line` — bugs/logic, quality/maintainability, performance. Security flagged when a severe issue is obvious in the diff.
+- **Findings tagged by severity** — every finding is prefixed 🔴 Important / 🟡 Nit / 🟣 Pre-existing and cites `file:line`, opening with a one-line tally. Bugs/logic, quality, performance. Inline nits are capped so the review stays actionable.
+- **Named anti-pattern hunting** — beyond generic "quality", the prompt names concrete smells to catch: parameter bloat, leaky abstractions, stringly-typed code, TOCTOU races, no-op updates, over-broad queries, redundant state, and reuse-before-write.
+- **Diff-aware triage** — before reviewing, the bot classifies the diff (size bucket; touches DB migrations / auth-sensitive paths / config / no tests) and feeds those signals to the model so it weights the review where risk lives.
+- **Conditional security deep-dive** — when the diff touches auth- or DB-sensitive paths, an extra checklist (injection, IDOR/authz, secrets/PII, XSS, unsafe input) is added to the prompt — and **only** then, so ordinary PRs pay nothing.
 - **Repo-specific guidelines** — a `.github/code-review-guidelines.md` refines the built-in prompt with your team's rules, focus areas, severity scale, and format.
-- **`REVIEW.md` override** — a repo-root `REVIEW.md` (Claude Code Review convention) is injected verbatim as **highest-priority**, review-only instructions that override the defaults and the guidelines file. Loaded independently; use either, both, or neither.
+- **`REVIEW.md` override** — a repo-root `REVIEW.md` (Claude Code Review convention) is injected verbatim as **highest-priority** review-only instructions that override the defaults, the guidelines file, and `extra_instructions`. Loaded from the **target branch**, so a PR can't inject rules to steer its own review.
+- **Opt-in severity gating** — the review stays advisory, but exposes `reviewed` / `important` / `nit` / `pre_existing` as **workflow outputs** so a downstream job can choose to block. A human-readable tally also lands in the job summary (see [§4](#4-optional-opt-in-to-severity-gating)).
 - **Built-in cost controls** — drafts skipped, superseded runs cancelled on new pushes, diffs over `max_diff_lines` (default 5000) skipped with an explanatory comment.
-- **Per-PR observability** — a token-usage table (and cost, when the provider reports it) written to the GitHub Actions **job summary**, plus a severity tally and a machine-readable `review-severity` marker for **opt-in** CI gating (see below).
+- **Per-PR observability** — a token-usage table (and cost, when the provider reports it) written to the GitHub Actions **job summary**.
 - **Any model, one line** — swap `moonshotai/kimi-k2.7-code-20260612` for any OpenRouter id, or any OpenAI-compatible endpoint, without touching the workflow.
 - **Least-privilege** — `contents: read`, `pull-requests: write`. Only the diff is sent, never the whole repo.
 - **Tunable reviewer voice** — set the comment heading (`bot_name`), toggle the model footer, cap `max_tokens` and `reasoning_effort` for thinking models.
@@ -178,12 +182,17 @@ consumer workflow calls the reusable workflow here, which:
 1. Skips draft PRs and cancels superseded runs for the same PR.
 2. Fetches the PR diff via the GitHub API (no checkout needed). If the diff
    exceeds `max_diff_lines`, posts a skip comment and exits successfully.
-3. Sends the diff in a single request to the configured model with an embedded
-   review prompt, then posts the response as one advisory summary comment.
+3. Triages the diff (size, DB/auth/config/test signals) and, for
+   security-sensitive changes, adds a focused security checklist to the prompt.
+   Loads your `guidelines_path` file and repo-root `REVIEW.md` if present.
+4. Sends the diff in a single request to the configured model with the embedded
+   review prompt, then posts the response as one advisory summary comment and
+   exposes the severity counts as workflow outputs.
 
 If the provider errors (bad key, no credit) or returns an empty response, the
 job posts a short "review unavailable" comment and exits successfully — it
-never fails the check or blocks the PR.
+never fails the check or blocks the PR (and `reviewed` stays unset, so a gate
+can fail closed).
 
 ---
 
