@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.11.0 — 2026-07-03
+
+- Rebrand to **Panoptes** (the hundred-eyed watchman). Default `bot_name` is now
+  `👁 Panoptes` (was `🤖 Kimo Reviewer`). Consumers that set `bot_name`
+  explicitly are unaffected. Added hero art and an eye-mark logo under `assets/`.
+
 ## v2.10.1 — 2026-07-03
 
 Hardening pass (from an ultrareview of v2.10.0):
