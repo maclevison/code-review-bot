@@ -44,10 +44,10 @@ on:
         required: false
         default: false
       max_tokens:
-        description: "Max completion tokens for the model reply. Set generously — reasoning models spend tokens thinking, and too low a cap truncates the review (finish_reason=length -> empty content)."
+        description: "Max completion tokens for the model reply. Set generously — reasoning models spend tokens thinking, and too low a cap truncates the review (finish_reason=length -> empty content). The default model is a reasoning model, so this budget must cover thinking + the written review."
         type: number
         required: false
-        default: 8000
+        default: 16000
       reasoning_effort:
         description: "OpenRouter reasoning effort for thinking models (low|medium|high). 'low' keeps a reasoning model from spending its whole token budget thinking and leaving the review empty. Set to '' (empty) to omit the reasoning parameter."
         type: string

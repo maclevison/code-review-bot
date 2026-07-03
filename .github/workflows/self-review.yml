@@ -1,0 +1,40 @@
+# Dogfood — panoptes reviews its OWN pull requests with its own reviewer.
+#
+# This is the end-to-end self-test: every PR here is reviewed by the exact
+# reusable workflow shipped to consumers (see templates/consumer-workflow.yml),
+# except it calls the workflow LOCALLY (`uses: ./…`) instead of by @tag, so a
+# PR always exercises the reviewer as changed in that same PR.
+#
+# Requires an OPENROUTER_API_KEY secret on this repo (or its org) — add it under
+# Settings → Secrets and variables → Actions. The key is passed explicitly
+# below; if the secret is missing it resolves to an empty string, so the call
+# does NOT hard-fail — the reviewer runs with an empty key and degrades to an
+# "unavailable" comment.
+#
+# Advisory by design: do NOT add this job to branch-protection required checks.
+# Fork PRs are skipped by the `if` guard below: they get no secrets and only a
+# read-only token, so they could neither review nor post a comment.
+name: Self Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  review:
+    # Same-repo PRs only — forks have no secret and a read-only token.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/review.yml
+    # Pass ONLY the key the reviewer needs — not `secrets: inherit`, which would
+    # expose every repo/org secret to a workflow loaded from the PR branch.
+    # Known dogfood tradeoff: because `uses: ./…` loads review.yml FROM the PR
+    # branch, a same-repo branch that edits review.yml runs its own version with
+    # this key. Blast radius is limited to OpenRouter credits — use a
+    # spend-capped key so a leaked/abused key can't run up cost.
+    secrets:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    with:
+      show_model_footer: true

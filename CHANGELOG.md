@@ -1,5 +1,27 @@
 # Changelog
 
+## v2.11.1 — 2026-07-03
+
+- **Fix empty reviews on the default model — raise default `max_tokens`
+  8000 → 16000.** The default model (`moonshotai/kimi-k2.7-code`) is a
+  reasoning model; its thinking tokens share the completion budget, so 8000
+  could be fully spent on reasoning and leave no written review
+  (`finish_reason=length`, empty content). Doubling the default gives the
+  review room. Cost per review rises accordingly; override `max_tokens` (or
+  use a non-reasoning model) to tune.
+- **Dogfood: panoptes now self-reviews its own PRs.** Added
+  `.github/workflows/self-review.yml`, which calls the reusable `review.yml`
+  locally (`uses: ./…`) on every pull request — an end-to-end self-test that
+  exercises the reviewer as changed in the same PR, complementing the offline
+  `selftest.yml` mock. Repo-internal only; no change to the consumer-facing
+  reusable workflow. Requires an `OPENROUTER_API_KEY` secret on the repo/org;
+  it is passed explicitly (not `secrets: inherit`), so a missing secret
+  resolves to an empty string and the review degrades to an "unavailable"
+  comment rather than hard-failing. Fork PRs are skipped (no secret, read-only
+  token). Use a spend-capped OpenRouter key, since a same-repo branch that
+  edits `review.yml` runs its own version with that key — an inherent dogfood
+  tradeoff.
+
 ## v2.11.0 — 2026-07-03
 
 - Rebrand to **Panoptes** (the hundred-eyed watchman). Default `bot_name` is now
