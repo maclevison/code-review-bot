@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/panoptes-hero.png" alt="Panoptes — the hundred-eyed code reviewer" width="260">
+<img src="assets/panoptes-1.webp" alt="Panoptes — the hundred-eyed code reviewer" width="230">
 
 # Panoptes
 
