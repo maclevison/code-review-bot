@@ -15,8 +15,8 @@ merge** — so nobody fights it, and everybody keeps it on.
 
 **Drop-in · Provider-agnostic · No servers · Yours in 5 minutes**
 
-[![selftest](https://img.shields.io/github/actions/workflow/status/maclevison/code-review-bot/selftest.yml?branch=main&label=selftest)](https://github.com/maclevison/code-review-bot/actions/workflows/selftest.yml)
-[![version](https://img.shields.io/github/v/tag/maclevison/code-review-bot?sort=semver&label=version)](https://github.com/maclevison/code-review-bot/tags)
+[![selftest](https://img.shields.io/github/actions/workflow/status/maclevison/panoptes/selftest.yml?branch=main&label=selftest)](https://github.com/maclevison/panoptes/actions/workflows/selftest.yml)
+[![version](https://img.shields.io/github/v/tag/maclevison/panoptes?sort=semver&label=version)](https://github.com/maclevison/panoptes/tags)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![advisory · never blocks](https://img.shields.io/badge/mode-advisory%20%C2%B7%20never%20blocks-8A2BE2)](#the-fix-a-tireless-first-pass-reviewer)
 [![LLM: OpenRouter](https://img.shields.io/badge/LLM-OpenRouter%20%C2%B7%20OpenAI--compatible-000)](#your-code-your-endpoint)
@@ -35,7 +35,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: OWNER/code-review-bot/.github/workflows/review.yml@v2
+    uses: OWNER/panoptes/.github/workflows/review.yml@v2
     secrets: inherit
 ```
 
@@ -149,7 +149,7 @@ Copy `templates/consumer-workflow.yml` to `.github/workflows/code-review.yml`
 in the target repo and replace `OWNER` with the user/org hosting this repo.
 That's it — the next non-draft PR gets reviewed.
 
-> The host repo must be named `code-review-bot`, or edit the `code-review-bot`
+> The host repo must be named `panoptes`, or edit the `panoptes`
 > path segment in the consumer template to match your repo name.
 
 ### 3. (Optional) Teach it your standards
@@ -185,7 +185,7 @@ Because this is a reusable (`workflow_call`) workflow, a per-job
 ```yaml
 jobs:
   review:
-    uses: OWNER/code-review-bot/.github/workflows/review.yml@v2
+    uses: OWNER/panoptes/.github/workflows/review.yml@v2
     secrets: inherit
   gate:
     needs: review

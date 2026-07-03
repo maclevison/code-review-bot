@@ -302,7 +302,7 @@ jobs:
             -H "Authorization: Bearer ${OPENROUTER_API_KEY}" \
             -H "Content-Type: application/json" \
             -H "HTTP-Referer: https://github.com/${REPO}" \
-            -H "X-Title: code-review-bot" \
+            -H "X-Title: panoptes" \
             -d "$payload") || {
               echo "Provider request failed. Response: ${resp:-<none>}"
               gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
