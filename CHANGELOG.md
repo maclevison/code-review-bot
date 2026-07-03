@@ -1,16 +1,35 @@
 # Changelog
 
+## v2.10.1 — 2026-07-03
+
+Hardening pass (from an ultrareview of v2.10.0):
+
+- **Security — REVIEW.md prompt injection fixed.** `REVIEW.md` now loads from
+  the PR **target branch** (`base.sha`), not the PR head. A contributor can no
+  longer add a `REVIEW.md` in their own PR to steer/neutralize its review. It is
+  also appended LAST so it truly outranks `extra_instructions` on conflict.
+- **Gating now works across jobs.** Severity counts are exposed as
+  `workflow_call` outputs (`reviewed`, `important`, `nit`, `pre_existing`) so a
+  downstream `needs:` job can gate — a per-job `$GITHUB_STEP_SUMMARY` can't be
+  read across jobs, so the previous README recipe silently passed. `reviewed` is
+  `'true'` only when a review actually completed, so gates can fail closed.
+- **No misleading tally on empty reviews.** The tally now runs only past the
+  empty-review guard, so a failed/empty model reply no longer emits `0/0/0`.
+- **Triage regexes anchored.** `auth`/`config` no longer match substrings like
+  `AUTHORS.md`/`oracle` (mid-word); pytest `test_*.py` is now counted as a test.
+- **Template aligned.** `templates/code-review-guidelines.md` Severity/Response
+  sections use the 🔴/🟡/🟣 scheme (were still `Blocker/Warning/Nit`).
+
 ## v2.10.0 — 2026-07-03
 
-- Repo-root `REVIEW.md` support: loaded independently of `guidelines_path` at
-  the PR head commit and injected verbatim as highest-priority, review-only
-  instructions that override the defaults and the guidelines file. Absent file
-  → no change.
+- Repo-root `REVIEW.md` support: injected verbatim as highest-priority,
+  review-only instructions that override the defaults and the guidelines file.
+  Absent file → no change.
 - Severity tally in the job summary: counts the review's `🔴`/`🟡`/`🟣` markers
-  and emits a machine-readable `<!-- review-severity: {...} -->` marker so teams
-  can OPT IN to CI gating. The review job stays advisory and always exits green.
+  and exposes the counts as workflow outputs so teams can OPT IN to CI gating.
+  The review job stays advisory and always exits green.
 - Docs: README and `templates/code-review-guidelines.md` document REVIEW.md,
-  the severity markers, and a `gh`/`jq` one-liner for opt-in gating.
+  the severity markers, and gating via workflow outputs.
 
   REVIEW.md convention and severity-marker approach inspired by
   [Claude Code Review](https://docs.claude.com/en/docs/claude-code/github-actions)

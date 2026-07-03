@@ -14,9 +14,10 @@ Higher-priority alternative — REVIEW.md:
     Instead of (or in addition to) this file, you can drop a `REVIEW.md` at the
     repo root. Following the Claude Code Review convention, REVIEW.md is treated
     as HIGHEST-PRIORITY review-only instructions: injected verbatim and
-    overriding the built-in defaults (and this guidelines file) when they
-    conflict. Both files are loaded independently at the PR head commit —
-    either, both, or neither may exist. Use REVIEW.md for hard rules you always
+    overriding the built-in defaults, this guidelines file, and
+    extra_instructions when they conflict. REVIEW.md loads from the TARGET
+    branch (only merged rules apply); this guidelines file loads at the PR head.
+    Either, both, or neither may exist. Use REVIEW.md for hard rules you always
     want honored; use this guidelines file for softer, additive refinements.
 
 Severity markers:
@@ -49,17 +50,18 @@ Severity markers:
 - Subjective naming preferences.
 
 ## Severity
-<!-- How you want findings ranked. -->
-- **Blocker:** data loss, security hole, breaks a critical invariant above.
-- **Warning:** likely bug, missing edge case, notable perf issue.
-- **Nit:** minor; prefix with "nit:" and keep to at most a few.
+<!-- How you want findings ranked. Use the built-in emoji so the tally counts them. -->
+- **🔴 Important:** data loss, security hole, breaks a critical invariant above.
+- **🟡 Nit:** minor; keep to at most a few.
+- **🟣 Pre-existing:** a bug visible in the diff context but NOT introduced by
+  this PR; flag it, don't count it against the change.
 
 ## Response format
 <!-- How the single summary comment should be structured. -->
-- Start with a one-line verdict: `Looks good` / `Needs attention` / `Blockers found`.
-- Then group findings under **Blockers**, **Warnings**, **Nits**.
-- Each finding: `path:line` + what's wrong + the suggested change, one line each.
-- End with a one-line summary of what the change does well (max one sentence).
-- Even when there is nothing to flag, do NOT output the bare verdict alone —
-  add one line naming what you checked (e.g. "verified tenant scoping, no
-  N+1, inputs validated"), so a clean review still shows the review happened.
+- Open with a one-line tally in WORDS (no emoji), e.g. `2 important · 1 nit`, or
+  `No blocking issues` when there are no 🔴/🟣 findings.
+- Then list each finding prefixed with its 🔴/🟡/🟣 marker: `path:line` + what's
+  wrong + the suggested change, one line each.
+- Even when there is nothing to flag, do NOT output the bare tally alone — add
+  one line naming what you checked (e.g. "verified tenant scoping, no N+1,
+  inputs validated"), so a clean review still shows the review happened.

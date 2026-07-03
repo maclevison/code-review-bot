@@ -124,32 +124,49 @@ to start. No file → the bot uses its defaults.
 
 For **hard rules you always want honored**, drop a `REVIEW.md` at the repo root
 instead. Following the Claude Code Review convention, it's injected verbatim as
-highest-priority, review-only instructions that override both the defaults and
-the guidelines file when they conflict. Both files load independently at the PR
-head commit — either, both, or neither may exist.
+highest-priority, review-only instructions that override the defaults, the
+guidelines file, **and** `extra_instructions` when they conflict. `REVIEW.md` is
+loaded from the **target branch** (not the PR head), so only merged rules take
+effect — a PR can't add a `REVIEW.md` to steer its own review. The guidelines
+file still loads at the PR head; either, both, or neither may exist.
 
 ### 4. (Optional) Opt in to severity gating
 
-The bot stays **advisory** — it never fails your CI. But it writes a
-machine-readable severity tally to the job summary so *you* can choose to gate:
+The bot stays **advisory** — it never fails your CI. But it exposes the severity
+counts as **workflow outputs** so *you* can choose to gate in a downstream job.
+It also writes a human-readable tally to the job summary:
 
 ```
 Findings: 🔴 2 · 🟡 1 · 🟣 3
-<!-- review-severity: {"important":2,"nit":1,"pre_existing":3} -->
 ```
 
-The counts come from the severity markers in the review body (`🔴` important,
-`🟡` nit, `🟣` pre_existing). A separate job in *your* workflow can read the
-marker and decide whether to block — a one-liner over the step summary:
+Because this is a reusable (`workflow_call`) workflow, a per-job
+`$GITHUB_STEP_SUMMARY` can't be read across jobs — so gate on the workflow
+**outputs** instead. Add a second job that `needs` the review:
 
-```bash
-# In a later step/job: parse the marker and fail only on important findings.
-important=$(grep -o 'review-severity: {[^}]*}' "$GITHUB_STEP_SUMMARY" \
-  | sed 's/review-severity: //' | jq '.important')
-[ "${important:-0}" -eq 0 ] || { echo "::error::$important important finding(s)"; exit 1; }
+```yaml
+jobs:
+  review:
+    uses: OWNER/code-review-bot/.github/workflows/review.yml@v2
+    secrets: inherit
+  gate:
+    needs: review
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          # `reviewed` is 'true' only when a review actually completed. Fail
+          # closed if it didn't run, then block on important findings.
+          if [ "${{ needs.review.outputs.reviewed }}" != "true" ]; then
+            echo "::error::code review did not complete"; exit 1
+          fi
+          important="${{ needs.review.outputs.important }}"
+          [ "${important:-0}" -eq 0 ] || { echo "::error::${important} important finding(s)"; exit 1; }
 ```
 
-Gating is entirely your call; the review job itself always exits green.
+Available outputs: `reviewed`, `important`, `nit`, `pre_existing`. The
+`important`/`pre_existing` counts are exact; `nit` counts only the inline-listed
+nits (the prompt caps them), so it may undercount on large reviews. Gating is
+entirely your call; the review job itself always exits green.
 
 ---
 
