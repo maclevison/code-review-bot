@@ -94,8 +94,18 @@ jobs:
             Focus, in priority order:
             1. Bugs and logic errors — edge cases, null/undefined handling,
                incorrect conditions, off-by-one errors, race conditions.
-            2. Quality and maintainability — naming, duplication, complexity,
-               missing tests for changed behavior.
+            2. Quality and maintainability — missing tests for changed behavior
+               and high-signal anti-patterns:
+               - Parameter bloat: 4+ positional args; prefer an options object.
+               - Leaky abstractions: raw ORM/HTTP/file-format details over domain types.
+               - Stringly-typed code: magic strings where enums/constants/branded types fit.
+               - Deeply nested conditionals: ternary chains/if nests; prefer early returns/lookups.
+               - Copy-paste variants: near-duplicates needing one parameterized helper.
+               - No-op updates: polling/events write state without change guards.
+               - TOCTOU races: check-then-act instead of atomic ops or try/catch.
+               - Over-broad operations: loading whole collections/files when a subset suffices.
+               - Redundant state: cached/derived fields recomputable from existing data.
+               - Reuse-before-write: new utility duplicates an existing helper.
             3. Performance — N+1 queries, expensive loops, unnecessary
                allocations, blocking calls.
 
