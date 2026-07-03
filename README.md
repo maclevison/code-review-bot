@@ -1,10 +1,6 @@
 <div align="center">
 
-<img src="assets/panoptes-1.webp" alt="Panoptes — the hundred-eyed code reviewer" width="230">
-
-# Panoptes
-
-### AI code review on every pull request — in one workflow file.
+<img src="assets/panoptes-repository-hero.webp" alt="Panoptes — AI code review on every pull request, in one workflow file" width="760">
 
 Named for the hundred-eyed watchman of myth: an advisory reviewer that reads your
 diff, flags the bugs by severity, and gets out of the way. **It never blocks a
