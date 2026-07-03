@@ -15,7 +15,11 @@ merge** — so nobody fights it, and everybody keeps it on.
 
 **Drop-in · Provider-agnostic · No servers · Yours in 5 minutes**
 
+[![selftest](https://img.shields.io/github/actions/workflow/status/maclevison/code-review-bot/selftest.yml?branch=main&label=selftest)](https://github.com/maclevison/code-review-bot/actions/workflows/selftest.yml)
+[![version](https://img.shields.io/github/v/tag/maclevison/code-review-bot?sort=semver&label=version)](https://github.com/maclevison/code-review-bot/tags)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![advisory · never blocks](https://img.shields.io/badge/mode-advisory%20%C2%B7%20never%20blocks-8A2BE2)](#the-fix-a-tireless-first-pass-reviewer)
+[![LLM: OpenRouter](https://img.shields.io/badge/LLM-OpenRouter%20%C2%B7%20OpenAI--compatible-000)](#your-code-your-endpoint)
 
 [Get started](#-get-started-in-5-minutes) · [Why teams adopt it](#why-teams-adopt-it) · [Features](#everything-you-get) · [Security](#your-code-your-endpoint) · [Config](#configuration-reference)
 
