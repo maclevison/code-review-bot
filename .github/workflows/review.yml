@@ -159,6 +159,67 @@ jobs:
             system="${system}"$'\n\nAdditional project-specific instructions:\n'"${EXTRA}"
           fi
 
+          # Lightweight diff triage from file headers only. These signals are
+          # advisory context for the model and must never affect CI outcome.
+          if [ "$lines" -lt 50 ]; then
+            size_bucket="XS"
+          elif [ "$lines" -lt 200 ]; then
+            size_bucket="S"
+          elif [ "$lines" -lt 600 ]; then
+            size_bucket="M"
+          elif [ "$lines" -lt 1500 ]; then
+            size_bucket="L"
+          else
+            size_bucket="XL"
+          fi
+
+          changed_paths=""
+          while IFS= read -r header; do
+            path=""
+            if [[ "$header" == "+++ b/"* ]]; then
+              path="${header#+++ b/}"
+            elif [[ "$header" == diff\ --git\ a/*\ b/* ]]; then
+              path="${header#* b/}"
+            fi
+
+            if [ -n "$path" ] && [ "$path" != "/dev/null" ]; then
+              changed_paths="${changed_paths}${path}"$'\n'
+            fi
+          done < <(printf '%s\n' "$diff" | grep -E '^(diff --git a/|[+][+][+] b/)' || true)
+
+          signals="size=${size_bucket}"
+          notable_signal=false
+          add_signal() {
+            signals="${signals}; $1"
+            notable_signal=true
+          }
+
+          db_paths=$(printf '%s' "$changed_paths" | grep -Eic 'migrations|migrate|schema\.(sql|prisma)|alembic' || true)
+          auth_paths=$(printf '%s' "$changed_paths" | grep -Eic 'auth|login|session|token|password|crypto|secret|permission|rbac|acl' || true)
+          test_paths=$(printf '%s' "$changed_paths" | grep -Eic 'test|spec|__tests__|[.]test[.]|[.]spec[.]' || true)
+          source_paths=$(printf '%s' "$changed_paths" | grep -Eic '\.(c|cc|cpp|cs|go|java|js|jsx|ts|tsx|py|rb|rs|php|swift|kt|kts|m|mm|scala|sh|bash|zsh|sql|prisma|vue|svelte)$|(^|/)(src|lib|app|packages|services|cmd|internal)/' || true)
+          config_paths=$(printf '%s' "$changed_paths" | grep -Eic '[.]github/|Dockerfile|[.]env|config|[.]ya?ml$' || true)
+
+          if [ "$size_bucket" = "L" ] || [ "$size_bucket" = "XL" ]; then
+            notable_signal=true
+          fi
+          if [ "$db_paths" -gt 0 ]; then
+            add_signal "touches DB migration"
+          fi
+          if [ "$auth_paths" -gt 0 ]; then
+            add_signal "touches auth-sensitive paths"
+          fi
+          if [ "$source_paths" -gt 0 ] && [ "$test_paths" -eq 0 ]; then
+            add_signal "NO test changes"
+          fi
+          if [ "$config_paths" -gt 0 ]; then
+            add_signal "touches config/CI"
+          fi
+
+          if [ "$notable_signal" = "true" ]; then
+            system="${system}"$'\n\nPR signals: '"${signals}"$' (weight your review accordingly)'
+          fi
+
           # Build the request body with jq so the diff is safely JSON-encoded.
           # When require_zero_retention is true, add OpenRouter's
           # provider.data_collection=deny so the request only routes to
