@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.10.0 — 2026-07-03
+
+- Repo-root `REVIEW.md` support: loaded independently of `guidelines_path` at
+  the PR head commit and injected verbatim as highest-priority, review-only
+  instructions that override the defaults and the guidelines file. Absent file
+  → no change.
+- Severity tally in the job summary: counts the review's `🔴`/`🟡`/`🟣` markers
+  and emits a machine-readable `<!-- review-severity: {...} -->` marker so teams
+  can OPT IN to CI gating. The review job stays advisory and always exits green.
+- Docs: README and `templates/code-review-guidelines.md` document REVIEW.md,
+  the severity markers, and a `gh`/`jq` one-liner for opt-in gating.
+
+  REVIEW.md convention and severity-marker approach inspired by
+  [Claude Code Review](https://docs.claude.com/en/docs/claude-code/github-actions)
+  and the MIT-licensed
+  [awesome-skills/code-review-skill](https://github.com/obra/awesome-skills).
+
 ## v2.9.0 — 2026-07-03
 
 - New `reasoning_effort` input (default `low`): caps how much a thinking
