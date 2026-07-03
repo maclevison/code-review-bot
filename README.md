@@ -4,15 +4,22 @@
 
 # Panoptes
 
-### AI code review on every pull request — for cents, in one workflow file.
+### AI code review on every pull request — in one workflow file.
 
-Named for the hundred-eyed watchman of myth — an advisory reviewer that reads
-your diff, comments on the bugs, and gets out of the way.
-It **never blocks a merge**. It just makes every PR a little safer.
+Named for the hundred-eyed watchman of myth: an advisory reviewer that reads your
+diff, flags the bugs by severity, and gets out of the way. **It never blocks a
+merge** — so nobody fights it, and everybody keeps it on.
+
+**Where does your code go?** Only the diff leaves — to an endpoint *you* choose
+(OpenRouter, Azure, Bedrock, or self-hosted). Least-privilege, MIT, auditable.
 
 **Drop-in · Provider-agnostic · No servers · Yours in 5 minutes**
 
+[![selftest](https://img.shields.io/github/actions/workflow/status/maclevison/code-review-bot/selftest.yml?branch=main&label=selftest)](https://github.com/maclevison/code-review-bot/actions/workflows/selftest.yml)
+[![version](https://img.shields.io/github/v/tag/maclevison/code-review-bot?sort=semver&label=version)](https://github.com/maclevison/code-review-bot/tags)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![advisory · never blocks](https://img.shields.io/badge/mode-advisory%20%C2%B7%20never%20blocks-8A2BE2)](#the-fix-a-tireless-first-pass-reviewer)
+[![LLM: OpenRouter](https://img.shields.io/badge/LLM-OpenRouter%20%C2%B7%20OpenAI--compatible-000)](#your-code-your-endpoint)
 
 [Get started](#-get-started-in-5-minutes) · [Why teams adopt it](#why-teams-adopt-it) · [Features](#everything-you-get) · [Security](#your-code-your-endpoint) · [Config](#configuration-reference)
 
@@ -34,6 +41,16 @@ jobs:
 
 ---
 
+## Start reviewing in 3 steps
+
+1. **Add your API key** — store an OpenRouter key as the `OPENROUTER_API_KEY` secret (once per org, or per repo).
+2. **Add one file** — copy `templates/consumer-workflow.yml` to `.github/workflows/code-review.yml` and set `OWNER` (that's the block above).
+3. **Open a PR** — the next non-draft PR gets one advisory review comment. Done.
+
+No app to install, no server to run, no webhook to wire up. Need org secrets, access settings, or a self-hosted endpoint? → [full setup in 5 minutes](#-get-started-in-5-minutes).
+
+---
+
 ## The problem you already have
 
 Human review is the bottleneck. PRs sit waiting for a reviewer. When someone
@@ -49,7 +66,7 @@ Review depth swings by reviewer, by team, by how tired everyone is on Friday.
 
 ## The fix: a tireless first-pass reviewer
 
-`code-review-bot` reads **every** non-draft PR the moment it opens, and posts
+Panoptes reads **every** non-draft PR the moment it opens, and posts
 **one** clear comment grouped by severity, citing `file:line`. Bugs & logic,
 maintainability, performance. Your reviewers walk into a diff that's already
 been read once.
@@ -62,11 +79,25 @@ it can't block you, nobody fights it, so everybody keeps it on.
 
 ---
 
+## Where Panoptes fits
+
+If Panoptes didn't exist, you'd reach for one of these. Here's the honest trade-off:
+
+| Instead of… | The catch | Panoptes |
+|---|---|---|
+| **Human review only** | The bottleneck — big diffs skimmed under time pressure, depth varies by reviewer. | Every PR read once *before* a human looks, consistently, grouped by severity. |
+| **A blocking AI reviewer** | False positives become merge standoffs, so teams eventually switch it off. | Advisory by design — it *can't* block, so nobody fights it and it stays on. |
+| **A hosted review SaaS** | Your code leaves for their servers, on their retention terms. | Only the diff leaves — to an endpoint *you* approve (Azure, Bedrock, self-hosted). |
+| **Static analysis / linters** | Great at syntax and known rules, blind to intent and tenant-scoping logic. | Reasons about the diff: missing scoping, N+1s, forgotten validation. Complements them — never replaces them. |
+| **Doing nothing** | The boring defects keep shipping on the busy weeks. | A tireless first pass on every PR, in one workflow file. |
+
+---
+
 ## Why teams adopt it
 
 | | |
 |---|---|
-| 💸 **Cents per PR** | One model call per PR — not an agent loop. Diff in, short review out. Token usage & cost land in the job summary, so spend is never a mystery. |
+| 📊 **One call, fully mapped** | One model call per PR — not an agent loop. Diff in, short review out. OpenRouter maps the token usage for every run into the job summary, so what the bot did is never a mystery. |
 | 🔌 **One file to adopt** | Copy a ~10-line workflow into a repo. Next PR gets reviewed. No app to install, no server to run, no webhook to babysit. |
 | 🏢 **Central config, org-wide** | One reusable workflow sets the default model, prompt, and version. Repos pin `@v2` and get patches automatically. |
 | 🔒 **Your code, your endpoint** | Speaks the OpenAI protocol — point it at OpenRouter, Azure, Bedrock, or a self-hosted model so code never leaves your network. |
@@ -80,12 +111,12 @@ it can't block you, nobody fights it, so everybody keeps it on.
 - **Findings tagged by severity** — every finding is prefixed 🔴 Important / 🟡 Nit / 🟣 Pre-existing and cites `file:line`, opening with a one-line tally. Bugs/logic, quality, performance. Inline nits are capped so the review stays actionable.
 - **Named anti-pattern hunting** — beyond generic "quality", the prompt names concrete smells to catch: parameter bloat, leaky abstractions, stringly-typed code, TOCTOU races, no-op updates, over-broad queries, redundant state, and reuse-before-write.
 - **Diff-aware triage** — before reviewing, the bot classifies the diff (size bucket; touches DB migrations / auth-sensitive paths / config / no tests) and feeds those signals to the model so it weights the review where risk lives.
-- **Conditional security deep-dive** — when the diff touches auth- or DB-sensitive paths, an extra checklist (injection, IDOR/authz, secrets/PII, XSS, unsafe input) is added to the prompt — and **only** then, so ordinary PRs pay nothing.
+- **Conditional security deep-dive** — when the diff touches auth- or DB-sensitive paths, an extra checklist (injection, IDOR/authz, secrets/PII, XSS, unsafe input) is added to the prompt — and **only** then, so ordinary PRs skip the overhead.
 - **Repo-specific guidelines** — a `.github/code-review-guidelines.md` refines the built-in prompt with your team's rules, focus areas, severity scale, and format.
 - **`REVIEW.md` override** — a repo-root `REVIEW.md` (Claude Code Review convention) is injected verbatim as **highest-priority** review-only instructions that override the defaults, the guidelines file, and `extra_instructions`. Loaded from the **target branch**, so a PR can't inject rules to steer its own review.
 - **Opt-in severity gating** — the review stays advisory, but exposes `reviewed` / `important` / `nit` / `pre_existing` as **workflow outputs** so a downstream job can choose to block. A human-readable tally also lands in the job summary (see [§4](#4-optional-opt-in-to-severity-gating)).
-- **Built-in cost controls** — drafts skipped, superseded runs cancelled on new pushes, diffs over `max_diff_lines` (default 5000) skipped with an explanatory comment.
-- **Per-PR observability** — a token-usage table (and cost, when the provider reports it) written to the GitHub Actions **job summary**.
+- **Built-in run controls** — drafts skipped, superseded runs cancelled on new pushes, diffs over `max_diff_lines` (default 5000) skipped with an explanatory comment.
+- **Per-PR usage, mapped by OpenRouter** — the token usage OpenRouter reports for each run is written to the GitHub Actions **job summary**, so every review is accountable.
 - **Any model, one line** — swap `moonshotai/kimi-k2.7-code-20260612` for any OpenRouter id, or any OpenAI-compatible endpoint, without touching the workflow.
 - **Least-privilege** — `contents: read`, `pull-requests: write`. Only the diff is sent, never the whole repo.
 - **Tunable reviewer voice** — set the comment heading (`bot_name`), toggle the model footer, cap `max_tokens` and `reasoning_effort` for thinking models.
@@ -266,7 +297,7 @@ opt in. (`v1` was the Claude-based engine.)
 
 <div align="center">
 
-**Every PR, read once before a human even looks. For cents.**
+**Every PR, read once before a human even looks.**
 
 [Get started](#-get-started-in-5-minutes) · [See the pitch](docs/PITCH.md) · [Changelog](CHANGELOG.md)
 
