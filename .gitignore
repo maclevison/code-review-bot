@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# This repo's product lives in .github/workflows — override any global
+# ignore of .github (e.g. ~/.gitignore_global) so the workflow files add
+# without needing `git add -f`.
+!.github/
+!.github/**
