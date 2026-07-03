@@ -9,6 +9,8 @@ It **never blocks a merge**. It just makes every PR a little safer.
 
 **Drop-in · Provider-agnostic · No servers · Yours in 5 minutes**
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 ```yaml
 # .github/workflows/code-review.yml — that's the whole integration
 on:
