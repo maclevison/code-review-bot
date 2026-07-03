@@ -5,8 +5,9 @@
 # except it calls the workflow LOCALLY (`uses: ./…`) instead of by @tag, so a
 # PR always exercises the reviewer as changed in that same PR.
 #
-# Requires an OPENROUTER_API_KEY secret on this repo (or its org). Without it,
-# the reviewer degrades gracefully and posts an "unavailable" comment.
+# Requires an OPENROUTER_API_KEY secret on this repo (or its org). It is
+# declared `required` by review.yml, so the call hard-fails if the secret is
+# absent (add it under Settings → Secrets and variables → Actions).
 #
 # Advisory by design: do NOT add this job to branch-protection required checks.
 # Fork PRs get a read-only token and no secrets, so the review is skipped/
@@ -23,6 +24,9 @@ jobs:
       contents: read
       pull-requests: write
     uses: ./.github/workflows/review.yml
-    secrets: inherit
+    # Pass ONLY the key the reviewer needs — not `secrets: inherit`, which would
+    # expose every repo/org secret to a workflow loaded from the PR branch.
+    secrets:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     with:
       show_model_footer: true
