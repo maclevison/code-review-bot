@@ -26,6 +26,10 @@ jobs:
     uses: ./.github/workflows/review.yml
     # Pass ONLY the key the reviewer needs — not `secrets: inherit`, which would
     # expose every repo/org secret to a workflow loaded from the PR branch.
+    # Known dogfood tradeoff: because `uses: ./…` loads review.yml FROM the PR
+    # branch, a same-repo branch that edits review.yml runs its own version with
+    # this key. Blast radius is limited to OpenRouter credits — use a
+    # spend-capped key so a leaked/abused key can't run up cost.
     secrets:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     with:
