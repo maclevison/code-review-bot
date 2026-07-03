@@ -1,8 +1,8 @@
 # Copy this file to .github/workflows/code-review.yml in your repo.
-# Replace OWNER with the user/org hosting code-review-bot.
+# Replace OWNER with the user/org hosting panoptes.
 # Requires an OPENROUTER_API_KEY secret in this repo (or the org).
 # Optional: add .github/code-review-guidelines.md to this repo to define
-# repo-specific review norms (see the code-review-bot README).
+# repo-specific review norms (see the panoptes README).
 name: Code Review
 
 on:
@@ -14,7 +14,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: OWNER/code-review-bot/.github/workflows/review.yml@v2
+    uses: OWNER/panoptes/.github/workflows/review.yml@v2
     secrets: inherit
     # Optional overrides:
     # with:
