@@ -280,22 +280,28 @@ jobs:
           fi
 
           # Build the request body with jq so the diff is safely JSON-encoded.
-          # Pass the two large values ($system, $diff) via --rawfile, NOT --arg:
-          # a single argv string is capped at MAX_ARG_STRLEN (128 KiB on Linux)
-          # regardless of the 2 MB ARG_MAX total, so a big diff passed with --arg
-          # makes jq's execve fail with E2BIG ("Argument list too long"). The
-          # line-count gate above bounds lines, not bytes, so a diff under
-          # max_diff_lines can still blow the per-arg byte limit. --rawfile reads
-          # the value from a file and sidesteps argv entirely.
+          # E2BIG guard, part 1 (jq input): pass the two large values ($system,
+          # $diff) via --rawfile, NOT --arg. A single argv string is capped at
+          # MAX_ARG_STRLEN (128 KiB on Linux) regardless of the 2 MB ARG_MAX
+          # total, so a big diff passed with --arg makes jq's execve fail with
+          # E2BIG ("Argument list too long"). The line-count gate above bounds
+          # lines, not bytes, so a diff under max_diff_lines can still blow the
+          # per-arg byte limit. --rawfile reads the value from a file and
+          # sidesteps argv entirely.
+          # E2BIG guard, part 2 (curl input): the assembled payload embeds the
+          # diff and is therefore even larger, so jq writes it to a file and
+          # curl reads it with --data-binary @file below — passing it as `-d
+          # "$payload"` would hit the same 128 KiB per-arg limit on curl.
           # When require_zero_retention is true, add OpenRouter's
           # provider.data_collection=deny so the request only routes to
           # providers that do not retain data.
           system_file="$(mktemp)"
           diff_file="$(mktemp)"
-          trap 'rm -f "$system_file" "$diff_file"' EXIT
+          payload_file="$(mktemp)"
+          trap 'rm -f "$system_file" "$diff_file" "$payload_file"' EXIT
           printf '%s' "$system" > "$system_file"
           printf '%s' "$diff" > "$diff_file"
-          payload=$(jq -n \
+          jq -n \
             --arg model "$MODEL" \
             --rawfile system "$system_file" \
             --rawfile user "$diff_file" \
@@ -307,7 +313,8 @@ jobs:
                {role: "user", content: ("Review this pull request diff:\n\n" + $user)}
              ]}
              + (if $zdr then {provider: {data_collection: "deny"}} else {} end)
-             + (if $reasoning != "" then {reasoning: {effort: $reasoning}} else {} end)')
+             + (if $reasoning != "" then {reasoning: {effort: $reasoning}} else {} end)' \
+            > "$payload_file"
 
           # Call the OpenAI-compatible endpoint (OpenRouter by default).
           resp=$(curl -sS --fail-with-body -X POST "${BASE_URL}/chat/completions" \
@@ -315,10 +322,20 @@ jobs:
             -H "Content-Type: application/json" \
             -H "HTTP-Referer: https://github.com/${REPO}" \
             -H "X-Title: panoptes" \
-            -d "$payload") || {
+            --data-binary @"$payload_file") || {
+              # An empty $resp means curl failed before receiving an HTTP
+              # response (network/TLS error) rather than the provider returning
+              # a 4xx/5xx body — a provider auth/credit error would carry a JSON
+              # body here. Report the two cases distinctly so the comment does
+              # not misattribute a transport failure to the API key or credit.
               echo "Provider request failed. Response: ${resp:-<none>}"
-              gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
-                ":robot: Code review unavailable: the model provider returned an error (check the OPENROUTER_API_KEY secret and your credit balance)." || true
+              if [ -z "$resp" ]; then
+                gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
+                  ":robot: Code review unavailable: could not reach the model provider (network error, no HTTP response). See the workflow logs." || true
+              else
+                gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
+                  ":robot: Code review unavailable: the model provider returned an error (check the OPENROUTER_API_KEY secret and your credit balance)." || true
+              fi
               exit 0
             }
 
