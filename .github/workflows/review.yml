@@ -280,13 +280,25 @@ jobs:
           fi
 
           # Build the request body with jq so the diff is safely JSON-encoded.
+          # Pass the two large values ($system, $diff) via --rawfile, NOT --arg:
+          # a single argv string is capped at MAX_ARG_STRLEN (128 KiB on Linux)
+          # regardless of the 2 MB ARG_MAX total, so a big diff passed with --arg
+          # makes jq's execve fail with E2BIG ("Argument list too long"). The
+          # line-count gate above bounds lines, not bytes, so a diff under
+          # max_diff_lines can still blow the per-arg byte limit. --rawfile reads
+          # the value from a file and sidesteps argv entirely.
           # When require_zero_retention is true, add OpenRouter's
           # provider.data_collection=deny so the request only routes to
           # providers that do not retain data.
+          system_file="$(mktemp)"
+          diff_file="$(mktemp)"
+          trap 'rm -f "$system_file" "$diff_file"' EXIT
+          printf '%s' "$system" > "$system_file"
+          printf '%s' "$diff" > "$diff_file"
           payload=$(jq -n \
             --arg model "$MODEL" \
-            --arg system "$system" \
-            --arg user "$diff" \
+            --rawfile system "$system_file" \
+            --rawfile user "$diff_file" \
             --argjson zdr "${REQUIRE_ZDR:-false}" \
             --argjson mt "${MAX_TOKENS:-8000}" \
             --arg reasoning "${REASONING_EFFORT:-}" \
