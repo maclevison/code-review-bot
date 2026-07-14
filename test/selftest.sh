@@ -1,30 +1,35 @@
 #!/usr/bin/env bash
 #
-# Deterministic self-test for the review pipeline. It mirrors the core
-# request/parse/guard logic of .github/workflows/review.yml against a mock
-# OpenRouter server (test/mock_openrouter.py), so no real API call, token
-# cost, or network is involved.
-#
-# NOTE: this is Option A (inline test). The core flow below is a COPY of the
-# logic in review.yml — keep the two in sync when you change either.
+# Deterministic self-test for bin/panoptes. Exercises the standalone CLI
+# directly (local `--diff` mode, `--format json`) against a mock OpenRouter
+# server (test/mock_openrouter.py), plus the `--llm-cmd` transport, the
+# fallback chain, and the fail-safe/--strict exit-code contract. No real API
+# call, token cost, or network is involved.
 #
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+PANOPTES="$ROOT/bin/panoptes"
+FIXTURE="$HERE/fixtures/sample.diff"
 PORT=8137
+FALLBACK_PORT=8138
+DEAD_PORT_1=8199
+DEAD_PORT_2=8198
 BASE_URL="http://127.0.0.1:${PORT}"
+FALLBACK_URL="http://127.0.0.1:${FALLBACK_PORT}"
 MODEL="mock/model"
-SYSTEM="You are an automated code reviewer."
-DIFF="$(cat "$HERE/fixtures/sample.diff")"
 MOCK_PID=""
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
 start_mock() {
-  MOCK_MODE="$1" PORT="$PORT" python3 "$HERE/mock_openrouter.py" &
+  # $1 = mode, $2 = port, sets MOCK_PID
+  MOCK_MODE="$1" PORT="$2" python3 "$HERE/mock_openrouter.py" &
   MOCK_PID=$!
+  local url="http://127.0.0.1:${2}"
   for _ in $(seq 1 50); do
-    if curl -s -o /dev/null "$BASE_URL"; then break; fi
+    if curl -s -o /dev/null "$url"; then break; fi
     sleep 0.1
   done
 }
@@ -36,55 +41,91 @@ stop_mock() {
 }
 trap stop_mock EXIT
 
-# Mirror of review.yml: build payload -> call -> parse -> guard.
-# Prints the review text on success, or a __TOKEN__ marking the graceful path
-# that review.yml would take (post "unavailable" comment, exit 0).
-run_core() {
-  local payload resp review
-  payload=$(jq -n \
-    --arg model "$MODEL" \
-    --arg system "$SYSTEM" \
-    --arg user "$DIFF" \
-    --argjson zdr false \
-    --argjson mt 8000 \
-    '{model: $model, max_tokens: $mt, messages: [
-       {role: "system", content: $system},
-       {role: "user", content: ("Review this pull request diff:\n\n" + $user)}
-     ]}
-     + (if $zdr then {provider: {data_collection: "deny"}} else {} end)')
-
-  resp=$(curl -sS --fail-with-body -X POST "${BASE_URL}/chat/completions" \
-    -H "Authorization: Bearer test" \
-    -H "Content-Type: application/json" \
-    -d "$payload") || { echo "__CURL_FAIL__"; return 0; }
-
-  review=$(printf '%s' "$resp" | jq -r '.choices[0].message.content // empty') || {
-    echo "__MALFORMED__"; return 0;
-  }
-  if [ -z "$review" ]; then echo "__EMPTY__"; return 0; fi
-  printf '%s' "$review"
-}
-
-# Test 1 — happy path: valid response is parsed and carries the canned review.
-start_mock ok
-out=$(run_core)
+# Test 1 — happy path: local --diff mode + --format json against the mock,
+# asserting reviewed/important/nit counts on the fixture.
+start_mock ok "$PORT"
+out=$("$PANOPTES" --diff "$FIXTURE" --base-url "$BASE_URL" --model "$MODEL" --format json)
 stop_mock
-printf '%s' "$out" | grep -q "discount.js:2" \
+reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
+nit=$(printf '%s' "$out" | jq -r '.nit')
+review_text=$(printf '%s' "$out" | jq -r '.review')
+[ "$reviewed" = "true" ] || fail "happy path: expected reviewed=true, got: $out"
+[ "$nit" = "0" ] || fail "happy path: expected nit=0, got: $out"
+printf '%s' "$review_text" | grep -q "discount.js:2" \
   || fail "happy path: expected review to reference discount.js:2, got: $out"
-echo "PASS  happy path (request built, response parsed, review extracted)"
+echo "PASS  happy path (--diff + --format json, reviewed/nit counts correct)"
 
-# Test 2 — non-JSON 200 body must degrade gracefully (not crash the step).
-start_mock html
-out=$(run_core)
+# Test 2 — non-JSON 200 body must degrade gracefully (fail-safe, exit 0,
+# reviewed=false), not crash the CLI.
+start_mock html "$PORT"
+out=$("$PANOPTES" --diff "$FIXTURE" --base-url "$BASE_URL" --model "$MODEL" --format json)
+code=$?
 stop_mock
-[ "$out" = "__MALFORMED__" ] || fail "malformed: expected __MALFORMED__, got: $out"
+[ "$code" -eq 0 ] || fail "malformed: expected exit 0, got $code"
+reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
+[ "$reviewed" = "false" ] || fail "malformed: expected reviewed=false, got: $out"
 echo "PASS  malformed 200 body degrades gracefully"
 
 # Test 3 — empty content must degrade gracefully.
-start_mock empty
-out=$(run_core)
+start_mock empty "$PORT"
+out=$("$PANOPTES" --diff "$FIXTURE" --base-url "$BASE_URL" --model "$MODEL" --format json)
+code=$?
 stop_mock
-[ "$out" = "__EMPTY__" ] || fail "empty: expected __EMPTY__, got: $out"
+[ "$code" -eq 0 ] || fail "empty: expected exit 0, got $code"
+reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
+[ "$reviewed" = "false" ] || fail "empty: expected reviewed=false, got: $out"
 echo "PASS  empty response degrades gracefully"
+
+# Test 4 — --llm-cmd transport: a tiny mock script reads stdin and prints a
+# canned review on stdout; panoptes must read it back as the review.
+llm_cmd_mock="$HERE/mock_llm_cmd.sh"
+out=$("$PANOPTES" --diff "$FIXTURE" --llm-cmd "$llm_cmd_mock" --format json)
+reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
+transport=$(printf '%s' "$out" | jq -r '.transport')
+review_text=$(printf '%s' "$out" | jq -r '.review')
+[ "$reviewed" = "true" ] || fail "llm-cmd: expected reviewed=true, got: $out"
+[ "$transport" = "cmd" ] || fail "llm-cmd: expected transport=cmd, got: $out"
+printf '%s' "$review_text" | grep -q "canned review" \
+  || fail "llm-cmd: expected canned review text, got: $out"
+echo "PASS  --llm-cmd transport (stdin piped, stdout read back)"
+
+# Test 5 — fallback chain: primary points at a dead port, fallback at the
+# mock. Must succeed via the fallback and report fallback_used=true.
+start_mock ok "$FALLBACK_PORT"
+out=$("$PANOPTES" --diff "$FIXTURE" \
+  --base-url "http://127.0.0.1:${DEAD_PORT_1}" --model dead/model \
+  --fallback-base-url "$FALLBACK_URL" --fallback-model "$MODEL" \
+  --format json)
+stop_mock
+reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
+fallback_used=$(printf '%s' "$out" | jq -r '.fallback_used')
+[ "$reviewed" = "true" ] || fail "fallback: expected reviewed=true, got: $out"
+[ "$fallback_used" = "true" ] || fail "fallback: expected fallback_used=true, got: $out"
+echo "PASS  fallback chain (primary down, fallback mock succeeds)"
+
+# Test 6 — fail-safe: both primary and fallback point at dead ports.
+# Default (no --strict): exit 0, reviewed=false.
+set +e
+out=$("$PANOPTES" --diff "$FIXTURE" \
+  --base-url "http://127.0.0.1:${DEAD_PORT_1}" --model dead/model \
+  --fallback-base-url "http://127.0.0.1:${DEAD_PORT_2}" --fallback-model dead/model2 \
+  --format json)
+code=$?
+set -e
+[ "$code" -eq 0 ] || fail "fail-safe: expected exit 0, got $code"
+reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
+[ "$reviewed" = "false" ] || fail "fail-safe: expected reviewed=false, got: $out"
+echo "PASS  fail-safe (both transports down, exit 0, reviewed=false)"
+
+# Test 7 — fail-safe with --strict: same setup, must exit 1.
+set +e
+"$PANOPTES" --diff "$FIXTURE" \
+  --base-url "http://127.0.0.1:${DEAD_PORT_1}" --model dead/model \
+  --fallback-base-url "http://127.0.0.1:${DEAD_PORT_2}" --fallback-model dead/model2 \
+  --strict --format json >/dev/null 2>&1
+code=$?
+set -e
+[ "$code" -eq 1 ] || fail "--strict: expected exit 1, got $code"
+echo "PASS  --strict escalates the fail-safe path to exit 1"
 
 echo "ALL SELFTESTS PASSED"
