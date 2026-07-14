@@ -128,4 +128,40 @@ set -e
 [ "$code" -eq 1 ] || fail "--strict: expected exit 1, got $code"
 echo "PASS  --strict escalates the fail-safe path to exit 1"
 
+# Tests 8/9 — --pr --comment mode, with `gh` stubbed on PATH (see mock_gh.sh).
+# This is the mode review.yml runs, and the only one where panoptes shells out
+# to a command that writes to stdout of its own accord.
+GH_STUB_DIR="$(mktemp -d)"
+cp "$HERE/mock_gh.sh" "$GH_STUB_DIR/gh"
+chmod +x "$GH_STUB_DIR/gh"
+COMMENT_OUT="$(mktemp)"
+cleanup_pr_mode() { rm -rf "$GH_STUB_DIR" "$COMMENT_OUT"; }
+trap 'stop_mock; cleanup_pr_mode' EXIT
+
+# Test 8 — stdout stays pure JSON in --pr --comment --format json. `gh pr
+# comment` echoes the created comment's URL on stdout; if that leaks into
+# panoptes' stdout, review.yml's `jq -r '.reviewed'` dies on it (exit 5) and
+# fails the job on every PR — green model or not.
+start_mock ok "$PORT"
+out=$(PATH="$GH_STUB_DIR:$PATH" MOCK_GH_FIXTURE="$FIXTURE" MOCK_GH_COMMENT_OUT="$COMMENT_OUT" \
+  "$PANOPTES" --pr 1 --repo mock/repo \
+  --base-url "$BASE_URL" --model "$MODEL" \
+  --show-model-footer --comment --format json 2>/dev/null)
+stop_mock
+printf '%s' "$out" | jq -e . >/dev/null 2>&1 \
+  || fail "pr mode: stdout is not valid JSON (gh chatter leaked?), got: $out"
+reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
+[ "$reviewed" = "true" ] || fail "pr mode: expected reviewed=true, got: $out"
+echo "PASS  --pr --comment --format json keeps stdout pure JSON"
+
+# Test 9 — the model footer is a footer: it must come after the review body,
+# not between the heading and the review.
+grep -q '^_Model: ' "$COMMENT_OUT" || fail "footer: no model line in comment: $(cat "$COMMENT_OUT")"
+footer_line=$(grep -n '^_Model: ' "$COMMENT_OUT" | head -n1 | cut -d: -f1)
+body_line=$(grep -n 'discount.js:2' "$COMMENT_OUT" | head -n1 | cut -d: -f1)
+[ -n "$body_line" ] || fail "footer: no review body in comment: $(cat "$COMMENT_OUT")"
+[ "$footer_line" -gt "$body_line" ] \
+  || fail "footer: model line at $footer_line precedes review body at $body_line"
+echo "PASS  --show-model-footer renders below the review body"
+
 echo "ALL SELFTESTS PASSED"

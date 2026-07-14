@@ -450,10 +450,13 @@ post_comment_if_requested() {
   [ "$DIFF_SOURCE" = "pr" ] && [ "$DO_COMMENT" = "true" ] || return 0
   COMMENT_FILE="$(mktemp)"
   printf '%s' "$1" > "$COMMENT_FILE"
+  # `gh pr comment` echoes the new comment's URL on stdout, but stdout is the
+  # `--format json` contract that review.yml pipes into jq — so keep gh's
+  # chatter on stderr, where it shows up in the job log with our other logs.
   if [ -n "$REPO" ]; then
-    gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$COMMENT_FILE" || log "Failed to post review comment"
+    gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$COMMENT_FILE" >&2 || log "Failed to post review comment"
   else
-    gh pr comment "$PR_NUMBER" --body-file "$COMMENT_FILE" || log "Failed to post review comment"
+    gh pr comment "$PR_NUMBER" --body-file "$COMMENT_FILE" >&2 || log "Failed to post review comment"
   fi
 }
 
@@ -865,15 +868,15 @@ if attempt_review; then
     comment_body="$(
       echo "## ${BOT_NAME}"
       echo ""
+      printf '%s\n' "$review"
       if [ "$SHOW_FOOTER" = "true" ]; then
+        echo ""
         if [ "$USED_TRANSPORT" = "http" ]; then
           echo "_Model: \`${USED_MODEL_LABEL}\` via OpenRouter — advisory, does not block merge._"
         else
           echo "_Model: \`${USED_MODEL_LABEL}\` — advisory, does not block merge._"
         fi
-        echo ""
       fi
-      printf '%s\n' "$review"
     )"
     post_comment_if_requested "$comment_body"
   fi
