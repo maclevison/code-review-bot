@@ -617,6 +617,7 @@ fi
 # 128 KiB per-arg limit on curl.
 # ---------------------------------------------------------------------------
 HTTP_FAIL_REASON=""
+HTTP_FAIL_CATEGORY=""
 LAST_REVIEW=""
 LAST_PTOK="?"
 LAST_CTOK="?"
@@ -652,18 +653,28 @@ http_call() {
 
   # An empty $resp means curl failed before receiving an HTTP response
   # (network/TLS error) rather than the provider returning a 4xx/5xx body —
-  # a provider auth/credit error would carry a JSON body here.
+  # a provider auth/credit error would carry a JSON body here. Report the two
+  # cases distinctly (HTTP_FAIL_CATEGORY) so a PR comment does not misattribute
+  # a transport failure to the API key or credit, matching the pre-extraction
+  # review.yml messages.
   resp="$(curl -sS --fail-with-body -X POST "${base_url}/chat/completions" \
     -H "Authorization: Bearer ${api_key}" \
     -H "Content-Type: application/json" \
     -H "HTTP-Referer: https://github.com/${REFERER_REPO}" \
     -H "X-Title: panoptes" \
     --data-binary @"$PAYLOAD_FILE")" || {
-      HTTP_FAIL_REASON="provider request failed (network error or non-2xx response)${resp:+: $resp}"
+      if [ -z "${resp:-}" ]; then
+        HTTP_FAIL_CATEGORY="network"
+        HTTP_FAIL_REASON="could not reach the provider (network/TLS error, no HTTP response)"
+      else
+        HTTP_FAIL_CATEGORY="http_error"
+        HTTP_FAIL_REASON="provider returned an error: ${resp}"
+      fi
       return 1
     }
 
   LAST_REVIEW="$(printf '%s' "$resp" | jq -r '.choices[0].message.content // empty')" || {
+    HTTP_FAIL_CATEGORY="malformed"
     HTTP_FAIL_REASON="malformed (non-JSON) provider response: $resp"
     return 1
   }
@@ -674,6 +685,7 @@ http_call() {
   LAST_FINISH="$(printf '%s' "$resp" | jq -r '.choices[0].finish_reason // "?"')"
 
   if [ -z "$LAST_REVIEW" ]; then
+    HTTP_FAIL_CATEGORY="empty"
     HTTP_FAIL_REASON="empty response content (finish_reason=${LAST_FINISH})"
     return 1
   fi
@@ -681,15 +693,18 @@ http_call() {
 }
 
 CMD_FAIL_REASON=""
+CMD_FAIL_CATEGORY=""
 
 cmd_call() {
   local cmd="$1" prompt output
   prompt="${system}"$'\n\n--- Review this pull request diff: ---\n\n'"${diff}"
   if ! output="$(printf '%s' "$prompt" | sh -c "$cmd")"; then
+    CMD_FAIL_CATEGORY="nonzero"
     CMD_FAIL_REASON="command exited non-zero"
     return 1
   fi
   if [ -z "$output" ]; then
+    CMD_FAIL_CATEGORY="empty"
     CMD_FAIL_REASON="empty stdout"
     return 1
   fi
@@ -714,6 +729,13 @@ cmd_call() {
 USED_TRANSPORT=""
 USED_MODEL_LABEL=""
 FALLBACK_USED=false
+# Preserved verbatim from whichever attempt(s) failed, so the caller can
+# reconstruct a precise skip message even after a second (fallback) attempt
+# has overwritten HTTP_FAIL_REASON/CMD_FAIL_REASON.
+PRIMARY_FAIL_CATEGORY=""
+PRIMARY_FAIL_REASON=""
+PRIMARY_FAIL_FINISH=""
+FALLBACK_FAIL_REASON=""
 
 attempt_review() {
   if [ "$PRIMARY_TRANSPORT" = "http" ]; then
@@ -721,12 +743,17 @@ attempt_review() {
       USED_TRANSPORT="http"; USED_MODEL_LABEL="$MODEL"
       return 0
     fi
+    PRIMARY_FAIL_CATEGORY="$HTTP_FAIL_CATEGORY"
+    PRIMARY_FAIL_REASON="$HTTP_FAIL_REASON"
+    PRIMARY_FAIL_FINISH="$LAST_FINISH"
     log "Primary transport (http ${BASE_URL}, model ${MODEL}) failed: ${HTTP_FAIL_REASON}"
   else
     if cmd_call "$LLM_CMD"; then
       USED_TRANSPORT="cmd"; USED_MODEL_LABEL="$LLM_CMD"
       return 0
     fi
+    PRIMARY_FAIL_CATEGORY="$CMD_FAIL_CATEGORY"
+    PRIMARY_FAIL_REASON="$CMD_FAIL_REASON"
     log "Primary transport (llm-cmd '${LLM_CMD}') failed: ${CMD_FAIL_REASON}"
   fi
 
@@ -741,15 +768,55 @@ attempt_review() {
       USED_TRANSPORT="http"; USED_MODEL_LABEL="$FALLBACK_MODEL"
       return 0
     fi
+    FALLBACK_FAIL_REASON="$HTTP_FAIL_REASON"
     log "Fallback transport (http ${FALLBACK_BASE_URL}, model ${FALLBACK_MODEL}) failed: ${HTTP_FAIL_REASON}"
   else
     if cmd_call "$FALLBACK_LLM_CMD"; then
       USED_TRANSPORT="cmd"; USED_MODEL_LABEL="$FALLBACK_LLM_CMD"
       return 0
     fi
+    FALLBACK_FAIL_REASON="$CMD_FAIL_REASON"
     log "Fallback transport (llm-cmd '${FALLBACK_LLM_CMD}') failed: ${CMD_FAIL_REASON}"
   fi
   return 1
+}
+
+# Builds the same user-facing ":robot: Code review unavailable: ..." message
+# review.yml posted pre-extraction, for the common case (http transport, no
+# fallback configured) so PR-mode comment text stays byte-compatible. When a
+# fallback was configured/attempted — a capability the pre-extraction engine
+# never had — falls back to a combined message describing both attempts.
+provider_failure_message() {
+  if [ "$FALLBACK_USED" != "true" ] && [ "$PRIMARY_TRANSPORT" = "http" ]; then
+    case "$PRIMARY_FAIL_CATEGORY" in
+      network)
+        echo ":robot: Code review unavailable: could not reach the model provider (network error, no HTTP response). See the workflow logs."
+        return 0
+        ;;
+      http_error)
+        echo ":robot: Code review unavailable: the model provider returned an error (check the OPENROUTER_API_KEY secret and your credit balance)."
+        return 0
+        ;;
+      malformed)
+        echo ":robot: Code review unavailable: the model provider returned an unexpected response."
+        return 0
+        ;;
+      empty)
+        local hint=""
+        if [ "$PRIMARY_FAIL_FINISH" = "length" ]; then
+          hint=" (finish_reason=length — the reply hit max_tokens=${MAX_TOKENS}; raise max_tokens or use a non-reasoning model)"
+        fi
+        echo ":robot: Code review unavailable: the model returned an empty response.${hint}"
+        return 0
+        ;;
+    esac
+  fi
+
+  if [ "$FALLBACK_USED" = "true" ]; then
+    echo ":robot: Code review unavailable: both the primary (${PRIMARY_FAIL_REASON}) and fallback (${FALLBACK_FAIL_REASON}) transports failed. See the workflow logs."
+  else
+    echo ":robot: Code review unavailable: the local review command failed (${PRIMARY_FAIL_REASON}). See the workflow logs."
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -815,7 +882,7 @@ if attempt_review; then
 else
   # Fail-safe: a provider/transport error is advisory context, never a CI
   # failure, unless the caller opted into --strict.
-  skip_msg=":robot: Code review unavailable: the model provider(s) failed. See stderr/logs for details."
+  skip_msg="$(provider_failure_message)"
   log "$skip_msg"
   post_comment_if_requested "$skip_msg"
 
