@@ -17,7 +17,7 @@ merge** — so nobody fights it, and everybody keeps it on.
 [![advisory · never blocks](https://img.shields.io/badge/mode-advisory%20%C2%B7%20never%20blocks-8A2BE2)](#the-fix-a-tireless-first-pass-reviewer)
 [![LLM: OpenRouter](https://img.shields.io/badge/LLM-OpenRouter%20%C2%B7%20OpenAI--compatible-000)](#your-code-your-endpoint)
 
-[Get started](#-get-started-in-5-minutes) · [Why teams adopt it](#why-teams-adopt-it) · [Features](#everything-you-get) · [Security](#your-code-your-endpoint) · [Config](#configuration-reference)
+[Get started](#-get-started-in-5-minutes) · [Why teams adopt it](#why-teams-adopt-it) · [Features](#everything-you-get) · [Security](#your-code-your-endpoint) · [Run it locally](#run-it-locally) · [Config](#configuration-reference)
 
 </div>
 
@@ -242,6 +242,85 @@ at whatever Security approves:
 The `OPENROUTER_API_KEY` secret is just the bearer token for `base_url` — name
 aside, it carries whatever provider's key you configure. **Only the diff is
 sent; the bot never uploads the full repository.**
+
+---
+
+## Run it locally
+
+The whole review engine — diff triage, prompt assembly, the provider call,
+severity tally, fail-safe behavior — lives in one dependency-free script:
+`bin/panoptes`. `review.yml` fetches and runs the exact same script in CI, so
+there is no drift between the local and CI behavior. Requires `bash`, `git`,
+`jq`, `curl`, and (only for `--pr` mode) `gh`.
+
+### Install
+
+```bash
+# Grab just the script...
+curl -fsSL https://raw.githubusercontent.com/OWNER/panoptes/main/bin/panoptes -o panoptes
+chmod +x panoptes
+
+# ...or clone the repo and use bin/panoptes directly.
+```
+
+### Pre-push review of your working branch
+
+```bash
+export PANOPTES_API_KEY=sk-or-...   # or OPENROUTER_API_KEY
+
+./panoptes --base main
+```
+
+Reviews `git diff main...HEAD` in the current repo and prints the markdown
+review to stdout — read it before you push. Guidelines (`.github/code-review-
+guidelines.md`) are read from the working tree; `REVIEW.md` is read from
+`main` (the target branch), same injection-safety property as PR mode.
+
+### Route through a local agent CLI instead of an HTTP API
+
+```bash
+./panoptes --base main --llm-cmd 'agy -p --output-format json'
+```
+
+`--llm-cmd` pipes the system prompt and diff to the command's stdin over
+`sh -c` and reads the review back from its stdout, instead of calling an
+OpenAI-compatible HTTP endpoint. Works with any local agent runner that can
+consume a prompt on stdin — if its stdout is JSON, panoptes tries
+`.response`/`.content`/`.text` before falling back to the raw text.
+
+### Fallback chain
+
+```bash
+./panoptes --base main \
+  --model moonshotai/kimi-k2.7-code-20260612 \
+  --fallback-model deepseek/deepseek-v4-flash-20260423
+```
+
+If the primary transport fails (network error, empty reply, non-2xx), panoptes
+tries the fallback exactly once — no blind retries against a free-tier quota —
+then fails safe (exit 0, prints a skip notice) unless you pass `--strict`
+(exit 1). `--fallback-base-url`/`--fallback-llm-cmd` work the same way for
+non-default endpoints or a fallback agent CLI.
+
+### Machine-readable output
+
+```bash
+./panoptes --base main --format json | jq '.important'
+```
+
+`--format json` prints one object — `reviewed`, `important`, `nit`,
+`pre_existing`, `review`, `model`, `transport`, `fallback_used` — instead of
+markdown, for wiring panoptes into another script or a pre-commit hook.
+
+### Review a diff from anywhere
+
+```bash
+./panoptes --diff my-change.diff          # a saved unified diff
+git diff | ./panoptes --diff -            # stdin
+./panoptes --pr 123 --repo OWNER/REPO --comment   # like CI, but from your machine
+```
+
+Run `./panoptes --help` for the full flag reference.
 
 ---
 
