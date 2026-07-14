@@ -348,7 +348,12 @@ if [ -n "$FALLBACK_LLM_CMD" ]; then
 elif [ -n "$FALLBACK_MODEL" ] || [ -n "$FALLBACK_BASE_URL" ]; then
   FALLBACK_ENABLED=true
   FALLBACK_TRANSPORT="http"
+  # Either half of the pair may be omitted: inherit the primary's value for
+  # the one that was left out, so --fallback-base-url alone retries the same
+  # model on another host (and --fallback-model alone retries on the same
+  # host) rather than sending an empty model field.
   FALLBACK_BASE_URL="${FALLBACK_BASE_URL:-$BASE_URL}"
+  FALLBACK_MODEL="${FALLBACK_MODEL:-$MODEL}"
 fi
 
 # ---------------------------------------------------------------------------

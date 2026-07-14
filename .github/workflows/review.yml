@@ -160,11 +160,22 @@ jobs:
           # hits, transport failures, usage, tally) in the job log.
           cat "$stderr_file"
 
-          reviewed=$(printf '%s' "$json_out" | jq -r '.reviewed')
-          important=$(printf '%s' "$json_out" | jq -r '.important')
-          nit=$(printf '%s' "$json_out" | jq -r '.nit')
-          pre_existing=$(printf '%s' "$json_out" | jq -r '.pre_existing')
-          used_model=$(printf '%s' "$json_out" | jq -r '.model')
+          # panoptes runs with `|| true` above precisely so a provider outage
+          # stays advisory — but that tolerance is only real if parsing its
+          # output is guarded too. Anything that leaves $json_out empty or
+          # non-JSON (a crash before emit_json, stray stdout from a helper)
+          # would otherwise make jq exit non-zero and, under `set -e`, turn an
+          # advisory failure into a red check. Validate once, then read from a
+          # known-good object; a missing review reports as reviewed=false.
+          if ! printf '%s' "$json_out" | jq -e . >/dev/null 2>&1; then
+            echo "panoptes emitted no parseable JSON on stdout; treating as no review."
+            json_out='{}'
+          fi
+          reviewed=$(printf '%s' "$json_out" | jq -r '.reviewed // false')
+          important=$(printf '%s' "$json_out" | jq -r '.important // 0')
+          nit=$(printf '%s' "$json_out" | jq -r '.nit // 0')
+          pre_existing=$(printf '%s' "$json_out" | jq -r '.pre_existing // 0')
+          used_model=$(printf '%s' "$json_out" | jq -r '.model // "unknown"')
 
           # Token usage is diagnostic-only and lives in panoptes' stderr log
           # (not the --format json contract), so parse it back out of the

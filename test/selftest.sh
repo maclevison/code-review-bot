@@ -128,7 +128,21 @@ set -e
 [ "$code" -eq 1 ] || fail "--strict: expected exit 1, got $code"
 echo "PASS  --strict escalates the fail-safe path to exit 1"
 
-# Tests 8/9 — --pr --comment mode, with `gh` stubbed on PATH (see mock_gh.sh).
+# Test 8 — a fallback given only a --fallback-base-url must inherit the
+# primary's model, not send an empty model field.
+start_mock ok "$FALLBACK_PORT"
+out=$("$PANOPTES" --diff "$FIXTURE" \
+  --base-url "http://127.0.0.1:${DEAD_PORT_1}" --model "$MODEL" \
+  --fallback-base-url "$FALLBACK_URL" \
+  --format json)
+stop_mock
+reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
+used_model=$(printf '%s' "$out" | jq -r '.model')
+[ "$reviewed" = "true" ] || fail "fallback inherit: expected reviewed=true, got: $out"
+[ "$used_model" = "$MODEL" ] || fail "fallback inherit: expected model=$MODEL, got: $out"
+echo "PASS  --fallback-base-url alone inherits the primary model"
+
+# Tests 9/10 — --pr --comment mode, with `gh` stubbed on PATH (see mock_gh.sh).
 # This is the mode review.yml runs, and the only one where panoptes shells out
 # to a command that writes to stdout of its own accord.
 GH_STUB_DIR="$(mktemp -d)"
@@ -138,7 +152,7 @@ COMMENT_OUT="$(mktemp)"
 cleanup_pr_mode() { rm -rf "$GH_STUB_DIR" "$COMMENT_OUT"; }
 trap 'stop_mock; cleanup_pr_mode' EXIT
 
-# Test 8 — stdout stays pure JSON in --pr --comment --format json. `gh pr
+# Test 9 — stdout stays pure JSON in --pr --comment --format json. `gh pr
 # comment` echoes the created comment's URL on stdout; if that leaks into
 # panoptes' stdout, review.yml's `jq -r '.reviewed'` dies on it (exit 5) and
 # fails the job on every PR — green model or not.
@@ -154,7 +168,7 @@ reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
 [ "$reviewed" = "true" ] || fail "pr mode: expected reviewed=true, got: $out"
 echo "PASS  --pr --comment --format json keeps stdout pure JSON"
 
-# Test 9 — the model footer is a footer: it must come after the review body,
+# Test 10 — the model footer is a footer: it must come after the review body,
 # not between the heading and the review.
 grep -q '^_Model: ' "$COMMENT_OUT" || fail "footer: no model line in comment: $(cat "$COMMENT_OUT")"
 footer_line=$(grep -n '^_Model: ' "$COMMENT_OUT" | head -n1 | cut -d: -f1)
