@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.11.2 — 2026-07-03
+
+- **`show_model_footer` now renders at the foot of the comment**, not directly
+  under the heading — it is an actual footer again. Still off by default. The
+  self-review workflow no longer enables it (the model line is omitted on
+  panoptes' own PRs).
+
 ## v2.11.1 — 2026-07-03
 
 - **Fix empty reviews on the default model — raise default `max_tokens`
