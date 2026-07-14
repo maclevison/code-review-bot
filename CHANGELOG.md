@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+- **Standalone local CLI: `bin/panoptes`.** The review engine previously
+  embedded as a ~430-line `run:` step in `.github/workflows/review.yml` is now
+  a dependency-free executable (`bash`, `git`, `jq`, `curl`, and `gh` for
+  `--pr` mode) that runs anywhere — no GitHub Actions required. Same diff
+  triage, prompt assembly (including the exact `SYSTEM_PROMPT` and the
+  `REVIEW.md` injection-safety property), severity tally, E2BIG guards, and
+  fail-safe philosophy as before. See the README's new
+  ["Run it locally"](README.md#run-it-locally) section.
+  - Three diff sources: `--diff <file|->`, `--base <ref>` (local `git diff`),
+    `--pr <number>` (only mode that can `--comment`, via `gh pr diff`).
+  - Two transports: the existing OpenAI-compatible HTTP call
+    (`--base-url`/`--model`, key from `PANOPTES_API_KEY` falling back to
+    `OPENROUTER_API_KEY`), or `--llm-cmd` to pipe the prompt into a local
+    agent CLI instead.
+  - A one-shot fallback transport (`--fallback-base-url`/`--fallback-model`
+    or `--fallback-llm-cmd`) tried once on primary failure, plus `--strict`
+    for callers that want a hard failure instead of the advisory exit 0.
+  - `--format json` for machine-readable output (`reviewed`, `important`,
+    `nit`, `pre_existing`, `review`, `model`, `transport`, `fallback_used`).
+- **`review.yml` is now a thin wrapper.** It fetches `bin/panoptes` from this
+  repo at the exact ref that is running (so a consumer pinned to `@v2` keeps
+  getting the `@v2` engine) and shells out to it in `--pr --comment --format
+  json` mode. Inputs, outputs, defaults, and the posted comment format are
+  unchanged — consumers pinned to a tag see identical behavior.
+- `test/selftest.sh` now exercises `bin/panoptes` directly (local `--diff`
+  mode + `--format json`) instead of carrying an inline copy of the request/
+  parse/guard logic that had to be hand-kept in sync with `review.yml`. Added
+  coverage for the `--llm-cmd` transport, the fallback chain, and the
+  fail-safe/`--strict` exit-code contract.
+
 ## v2.11.2 — 2026-07-03
 
 - **`show_model_footer` now renders at the foot of the comment**, not directly
