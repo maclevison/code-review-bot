@@ -20,6 +20,7 @@ BASE_URL="http://127.0.0.1:${PORT}"
 FALLBACK_URL="http://127.0.0.1:${FALLBACK_PORT}"
 MODEL="mock/model"
 MOCK_PID=""
+TMP_EMPTY_DIFF="$(mktemp)"
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
@@ -89,6 +90,49 @@ printf '%s' "$review_text" | grep -q "canned review" \
   || fail "llm-cmd: expected canned review text, got: $out"
 echo "PASS  --llm-cmd transport (stdin piped, stdout read back)"
 
+# Test 4b — an agent JSON envelope: the review lives in .response and must be
+# unwrapped, not posted as raw JSON.
+out=$(MOCK_CMD_MODE=envelope_ok "$PANOPTES" --diff "$FIXTURE" --llm-cmd "$llm_cmd_mock" --format json)
+reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
+review_text=$(printf '%s' "$out" | jq -r '.review')
+nit=$(printf '%s' "$out" | jq -r '.nit')
+[ "$reviewed" = "true" ] || fail "envelope_ok: expected reviewed=true, got: $out"
+[ "$nit" = "1" ] || fail "envelope_ok: expected nit=1, got: $out"
+printf '%s' "$review_text" | grep -q "canned review" \
+  || fail "envelope_ok: expected .response unwrapped, got: $out"
+printf '%s' "$review_text" | grep -q "conversation_id" \
+  && fail "envelope_ok: raw envelope leaked into the review, got: $out"
+echo "PASS  --llm-cmd unwraps .response from an agent JSON envelope"
+
+# Test 4c — THE fail-open: an envelope reporting status=ERROR with exit 0 must
+# be a transport failure. Falling back to "raw stdout is the review" here would
+# post the error blob as a clean review (reviewed=true, 0 findings) and let a
+# gate pass on a review that never happened.
+set +e
+out=$(MOCK_CMD_MODE=envelope_error "$PANOPTES" --diff "$FIXTURE" --llm-cmd "$llm_cmd_mock" --format json)
+code=$?
+set -e
+[ "$code" -eq 0 ] || fail "envelope_error: expected advisory exit 0, got $code"
+reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
+[ "$reviewed" = "false" ] || fail "envelope_error: status=ERROR reported as a review: $out"
+printf '%s' "$out" | jq -r '.failure.primary_error' | grep -q "Agent execution terminated" \
+  || fail "envelope_error: envelope .error missing from failure, got: $out"
+echo "PASS  --llm-cmd envelope status=ERROR is a failure, not a review"
+
+# Test 4d — valid JSON with no recognized review field is a failure too, for
+# the same reason: the raw object is not a review.
+out=$(MOCK_CMD_MODE=envelope_bare "$PANOPTES" --diff "$FIXTURE" --llm-cmd "$llm_cmd_mock" --format json)
+reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
+[ "$reviewed" = "false" ] || fail "envelope_bare: bare JSON reported as a review: $out"
+echo "PASS  --llm-cmd JSON with no review field is a failure"
+
+# Test 4e — a command that fails must carry its own stdout into the error, so
+# the diagnosis does not require re-running it by hand.
+out=$(MOCK_CMD_MODE=fail_stdout "$PANOPTES" --diff "$FIXTURE" --llm-cmd "$llm_cmd_mock" --format json)
+printf '%s' "$out" | jq -r '.failure.primary_error' | grep -q "be3a6aa3-dead-beef" \
+  || fail "fail_stdout: command stdout missing from the error, got: $out"
+echo "PASS  --llm-cmd failure carries the command's stdout tail"
+
 # Test 5 — fallback chain: primary points at a dead port, fallback at the
 # mock. Must succeed via the fallback and report fallback_used=true.
 start_mock ok "$FALLBACK_PORT"
@@ -116,6 +160,31 @@ set -e
 reviewed=$(printf '%s' "$out" | jq -r '.reviewed')
 [ "$reviewed" = "false" ] || fail "fail-safe: expected reviewed=false, got: $out"
 echo "PASS  fail-safe (both transports down, exit 0, reviewed=false)"
+
+# Test 6b — when nothing produced a review, model/transport must be null rather
+# than a mix of the fallback's model and the primary's transport, and the two
+# errors must be reported per attempt.
+out=$(MOCK_CMD_MODE=fail_stdout "$PANOPTES" --diff "$FIXTURE" \
+  --llm-cmd "$llm_cmd_mock" \
+  --fallback-base-url "http://127.0.0.1:${DEAD_PORT_2}" --fallback-model dead/model2 \
+  --format json)
+[ "$(printf '%s' "$out" | jq -r '.model')" = "null" ] \
+  || fail "metadata: expected model=null when nothing succeeded, got: $out"
+[ "$(printf '%s' "$out" | jq -r '.transport')" = "null" ] \
+  || fail "metadata: expected transport=null when nothing succeeded, got: $out"
+printf '%s' "$out" | jq -e '.failure.primary_error != "" and .failure.fallback_error != null' >/dev/null \
+  || fail "metadata: expected both per-attempt errors in failure, got: $out"
+echo "PASS  total failure reports model/transport null + per-attempt errors"
+
+# Test 6c — a skip (empty diff) is not a failure: reviewed=false but failure
+# stays null, so a consumer can tell "nothing to review" from "review died".
+: > "$TMP_EMPTY_DIFF"
+out=$("$PANOPTES" --diff "$TMP_EMPTY_DIFF" --llm-cmd "$llm_cmd_mock" --format json)
+[ "$(printf '%s' "$out" | jq -r '.reviewed')" = "false" ] \
+  || fail "empty diff: expected reviewed=false, got: $out"
+[ "$(printf '%s' "$out" | jq -r '.failure')" = "null" ] \
+  || fail "empty diff: a skip must not report a failure, got: $out"
+echo "PASS  skip reports failure=null (distinguishable from a dead transport)"
 
 # Test 7 — fail-safe with --strict: same setup, must exit 1.
 set +e
@@ -149,7 +218,7 @@ GH_STUB_DIR="$(mktemp -d)"
 cp "$HERE/mock_gh.sh" "$GH_STUB_DIR/gh"
 chmod +x "$GH_STUB_DIR/gh"
 COMMENT_OUT="$(mktemp)"
-cleanup_pr_mode() { rm -rf "$GH_STUB_DIR" "$COMMENT_OUT"; }
+cleanup_pr_mode() { rm -rf "$GH_STUB_DIR" "$COMMENT_OUT" "$TMP_EMPTY_DIFF"; }
 trap 'stop_mock; cleanup_pr_mode' EXIT
 
 # Test 9 — stdout stays pure JSON in --pr --comment --format json. `gh pr

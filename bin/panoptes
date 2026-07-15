@@ -123,9 +123,13 @@ TRANSPORT (default: HTTP against an OpenAI-compatible endpoint):
                              $OPENROUTER_API_KEY.
   --llm-cmd "CMD"            Instead of curl, run CMD via `sh -c`, piping the
                              system prompt + diff to its stdin and reading the
-                             review from its stdout. If stdout is JSON, tries
-                             `.response // .content // .text` before falling
-                             back to the raw text.
+                             review from its stdout. Non-JSON stdout is taken
+                             as the review verbatim. JSON stdout is treated as
+                             an agent envelope: a `status` field that is not
+                             SUCCESS is a transport failure (its `error` is
+                             reported), otherwise the review is read from
+                             `.response // .content // .text` — JSON carrying
+                             none of those is a failure, never a review.
 
 FALLBACK (tried once, only after the primary transport fails):
   --fallback-base-url URL
@@ -143,7 +147,13 @@ PROMPT CONTEXT:
 
 OUTPUT:
   --format text|json          Default: text (review to stdout, tally+usage to
-                             stderr). json prints one JSON object to stdout.
+                             stderr). json prints one JSON object to stdout:
+                             {reviewed, important, nit, pre_existing, review,
+                             model, transport, fallback_used, failure}.
+                             model/transport are null unless an attempt
+                             succeeded; failure is null on a skip and
+                             {primary_error, fallback_error} when every
+                             transport failed.
   --comment                  --pr mode only: also post the review via
                              `gh pr comment`.
   --bot-name TEXT             Comment heading. Default: "👁 Panoptes".
@@ -419,21 +429,14 @@ case "$DIFF_SOURCE" in
     ;;
 esac
 
-if [ -z "$diff" ]; then
-  log "Empty diff; nothing to review."
-  if [ "$FORMAT" = "json" ]; then
-    jq -n --arg model "${LLM_CMD:-$MODEL}" --arg transport "$PRIMARY_TRANSPORT" \
-      '{reviewed: false, important: 0, nit: 0, pre_existing: 0, review: "", model: $model, transport: $transport, fallback_used: false}'
-  fi
-  exit 0
-fi
-
-lines=$(printf '%s' "$diff" | wc -l | tr -d ' ') || lines=0
-log "Diff has ${lines} lines (limit: ${MAX_DIFF_LINES})"
-
 emit_json() {
   # $1=reviewed(true/false) $2=important $3=nit $4=pre_existing $5=review
-  # $6=model $7=transport $8=fallback_used
+  # $6=model $7=transport $8=fallback_used $9=failure object (JSON, or "null")
+  #
+  # `model`/`transport` describe what actually produced the review, so they are
+  # null whenever none did — a skip or a dead transport. `failure` is what tells
+  # those two apart: null on a skip (nothing was attempted), an object carrying
+  # the per-attempt errors when every attempt failed.
   local review_file
   review_file="$(mktemp)"
   printf '%s' "$5" > "$review_file"
@@ -446,9 +449,27 @@ emit_json() {
     --arg model "$6" \
     --arg transport "$7" \
     --argjson fallback_used "$8" \
-    '{reviewed: $reviewed, important: $important, nit: $nit, pre_existing: $pre_existing, review: $review, model: $model, transport: $transport, fallback_used: $fallback_used}'
+    --argjson failure "${9:-null}" \
+    '{reviewed: $reviewed, important: $important, nit: $nit, pre_existing: $pre_existing,
+      review: $review,
+      model: (if $model == "" then null else $model end),
+      transport: (if $transport == "" then null else $transport end),
+      fallback_used: $fallback_used,
+      failure: $failure}'
   rm -f "$review_file"
 }
+
+if [ -z "$diff" ]; then
+  log "Empty diff; nothing to review."
+  if [ "$FORMAT" = "json" ]; then
+    emit_json false 0 0 0 "" "" "" false null
+  fi
+  exit 0
+fi
+
+lines=$(printf '%s' "$diff" | wc -l | tr -d ' ') || lines=0
+log "Diff has ${lines} lines (limit: ${MAX_DIFF_LINES})"
+
 
 post_comment_if_requested() {
   # $1 = body text
@@ -470,7 +491,7 @@ if [ "$lines" -gt "$MAX_DIFF_LINES" ]; then
   log "$skip_msg"
   post_comment_if_requested "$skip_msg"
   if [ "$FORMAT" = "json" ]; then
-    emit_json false 0 0 0 "" "${LLM_CMD:-$MODEL}" "$PRIMARY_TRANSPORT" false
+    emit_json false 0 0 0 "" "" "" false null
   fi
   exit 0
 fi
@@ -626,6 +647,10 @@ fi
 # ---------------------------------------------------------------------------
 HTTP_FAIL_REASON=""
 HTTP_FAIL_CATEGORY=""
+# Raw provider error body, kept apart from the log-shaped HTTP_FAIL_REASON so
+# the user-facing message can quote the provider's own wording (a stale model
+# id says so here, and no amount of checking the API key would reveal it).
+HTTP_FAIL_BODY=""
 LAST_REVIEW=""
 LAST_PTOK="?"
 LAST_CTOK="?"
@@ -677,6 +702,7 @@ http_call() {
       else
         HTTP_FAIL_CATEGORY="http_error"
         HTTP_FAIL_REASON="provider returned an error: ${resp}"
+        HTTP_FAIL_BODY="$resp"
       fi
       return 1
     }
@@ -703,12 +729,25 @@ http_call() {
 CMD_FAIL_REASON=""
 CMD_FAIL_CATEGORY=""
 
+# Last 2KB of a failed command's stdout, flattened onto one log line. An agent
+# CLI usually reports its own failure as a JSON envelope on stdout and exits
+# non-zero, so these are the bytes that actually explain the failure — the HTTP
+# transport already reports the provider's error body this way. Only stdout is
+# captured here: the command's stderr is left to stream through to ours, where
+# it is already in front of the user (and in the job log under Actions).
+cmd_output_tail() {
+  printf '%s' "$1" | tail -c 2000 | tr '\n' ' '
+}
+
 cmd_call() {
   local cmd="$1" prompt output
   prompt="${system}"$'\n\n--- Review this pull request diff: ---\n\n'"${diff}"
   if ! output="$(printf '%s' "$prompt" | sh -c "$cmd")"; then
     CMD_FAIL_CATEGORY="nonzero"
     CMD_FAIL_REASON="command exited non-zero"
+    if [ -n "$output" ]; then
+      CMD_FAIL_REASON="${CMD_FAIL_REASON}; stdout: $(cmd_output_tail "$output")"
+    fi
     return 1
   fi
   if [ -z "$output" ]; then
@@ -717,19 +756,36 @@ cmd_call() {
     return 1
   fi
 
-  local trimmed first_char extracted
+  local trimmed first_char extracted status
   trimmed="$(printf '%s' "$output" | sed -e 's/^[[:space:]]*//')"
   first_char="${trimmed:0:1}"
-  if [ "$first_char" = "{" ]; then
-    extracted="$(printf '%s' "$output" | jq -r '.response // .content // .text // empty' 2>/dev/null)" || extracted=""
-    if [ -n "$extracted" ]; then
-      LAST_REVIEW="$extracted"
-    else
-      LAST_REVIEW="$output"
-    fi
-  else
+  if [ "$first_char" != "{" ] || ! printf '%s' "$output" | jq -e . >/dev/null 2>&1; then
+    # Not a JSON envelope (or only looks like one): the raw stdout is the review.
     LAST_REVIEW="$output"
+    LAST_PTOK="?"; LAST_CTOK="?"; LAST_TTOK="?"; LAST_COST=""; LAST_FINISH="n/a"
+    return 0
   fi
+
+  # A JSON envelope. Agent CLIs report failure INSIDE it — `agy --output-format
+  # json` answers {"status":"ERROR","response":null,"error":"..."} and still
+  # exits 0 — so the status field, not the exit code, is what says whether a
+  # review happened. Treating a non-SUCCESS envelope as text would post the
+  # error blob itself as a clean review.
+  status="$(printf '%s' "$output" | jq -r '.status // empty' 2>/dev/null)" || status=""
+  if [ -n "$status" ] && [ "$status" != "SUCCESS" ] && [ "$status" != "success" ]; then
+    CMD_FAIL_CATEGORY="envelope_error"
+    CMD_FAIL_REASON="command reported status=${status}: $(printf '%s' "$output" | jq -r '.error // "no error field"' 2>/dev/null)"
+    return 1
+  fi
+  extracted="$(printf '%s' "$output" | jq -r '.response // .content // .text // empty' 2>/dev/null)" || extracted=""
+  if [ -z "$extracted" ]; then
+    # Valid JSON, no field we recognize as the review. Falling back to the raw
+    # envelope here is what let an error blob through as `reviewed: true`.
+    CMD_FAIL_CATEGORY="envelope_unknown"
+    CMD_FAIL_REASON="JSON output with no .response/.content/.text field: $(cmd_output_tail "$output")"
+    return 1
+  fi
+  LAST_REVIEW="$extracted"
   LAST_PTOK="?"; LAST_CTOK="?"; LAST_TTOK="?"; LAST_COST=""; LAST_FINISH="n/a"
   return 0
 }
@@ -742,6 +798,7 @@ FALLBACK_USED=false
 # has overwritten HTTP_FAIL_REASON/CMD_FAIL_REASON.
 PRIMARY_FAIL_CATEGORY=""
 PRIMARY_FAIL_REASON=""
+PRIMARY_FAIL_BODY=""
 PRIMARY_FAIL_FINISH=""
 FALLBACK_FAIL_REASON=""
 
@@ -753,6 +810,7 @@ attempt_review() {
     fi
     PRIMARY_FAIL_CATEGORY="$HTTP_FAIL_CATEGORY"
     PRIMARY_FAIL_REASON="$HTTP_FAIL_REASON"
+    PRIMARY_FAIL_BODY="$HTTP_FAIL_BODY"
     PRIMARY_FAIL_FINISH="$LAST_FINISH"
     log "Primary transport (http ${BASE_URL}, model ${MODEL}) failed: ${HTTP_FAIL_REASON}"
   else
@@ -802,7 +860,18 @@ provider_failure_message() {
         return 0
         ;;
       http_error)
-        echo ":robot: Code review unavailable: the model provider returned an error (check the OPENROUTER_API_KEY secret and your credit balance)."
+        # Quote the provider verbatim when it said something specific (a
+        # retired model id, a rate limit); the key/credit hint is only a
+        # guess, and a wrong guess is what sends people key-hunting.
+        local provider_msg=""
+        if [ -n "$PRIMARY_FAIL_BODY" ]; then
+          provider_msg="$(printf '%s' "$PRIMARY_FAIL_BODY" | jq -r '.error.message // empty' 2>/dev/null)" || provider_msg=""
+        fi
+        if [ -n "$provider_msg" ]; then
+          echo ":robot: Code review unavailable: the model provider returned an error: $(printf '%.300s' "$provider_msg")"
+        else
+          echo ":robot: Code review unavailable: the model provider returned an error (check the OPENROUTER_API_KEY secret and your credit balance)."
+        fi
         return 0
         ;;
       malformed)
@@ -864,7 +933,7 @@ if attempt_review; then
   log "Findings: 🔴 ${n_important} · 🟡 ${n_nit} · 🟣 ${n_pre}"
 
   if [ "$FORMAT" = "json" ]; then
-    emit_json true "$n_important" "$n_nit" "$n_pre" "$review" "$USED_MODEL_LABEL" "$USED_TRANSPORT" "$FALLBACK_USED"
+    emit_json true "$n_important" "$n_nit" "$n_pre" "$review" "$USED_MODEL_LABEL" "$USED_TRANSPORT" "$FALLBACK_USED" null
   else
     printf '%s\n' "$review"
   fi
@@ -894,12 +963,18 @@ else
   log "$skip_msg"
   post_comment_if_requested "$skip_msg"
 
-  used_label="${LLM_CMD:-$MODEL}"
-  [ "$FALLBACK_USED" = "true" ] && [ "$FALLBACK_TRANSPORT" = "http" ] && used_label="$FALLBACK_MODEL"
-  [ "$FALLBACK_USED" = "true" ] && [ "$FALLBACK_TRANSPORT" = "cmd" ] && used_label="$FALLBACK_LLM_CMD"
-
+  # USED_MODEL_LABEL/USED_TRANSPORT are set only by a successful attempt, so
+  # here they are both empty and serialize to null: nothing produced this
+  # result. (Reporting the fallback's model beside the primary's transport is
+  # exactly the incoherence this replaces.) The per-attempt errors are what a
+  # caller actually needs, so they go in `failure`.
   if [ "$FORMAT" = "json" ]; then
-    emit_json false 0 0 0 "" "$used_label" "$PRIMARY_TRANSPORT" "$FALLBACK_USED"
+    failure_json="$(jq -n \
+      --arg primary "$PRIMARY_FAIL_REASON" \
+      --arg fallback "$FALLBACK_FAIL_REASON" \
+      '{primary_error: $primary,
+        fallback_error: (if $fallback == "" then null else $fallback end)}')"
+    emit_json false 0 0 0 "" "$USED_MODEL_LABEL" "$USED_TRANSPORT" "$FALLBACK_USED" "$failure_json"
   fi
 
   if [ "$STRICT" = "true" ]; then
