@@ -15,12 +15,31 @@
   - Two transports: the existing OpenAI-compatible HTTP call
     (`--base-url`/`--model`, key from `PANOPTES_API_KEY` falling back to
     `OPENROUTER_API_KEY`), or `--llm-cmd` to pipe the prompt into a local
-    agent CLI instead.
+    agent CLI instead. `--llm-cmd` reads non-JSON stdout as the review
+    verbatim; JSON stdout is treated as an agent envelope, where a `status`
+    other than SUCCESS is a transport failure (reporting the envelope's
+    `error`) and the review is read from `.response // .content // .text`.
+    JSON carrying none of those is a failure too — never a review, so an
+    agent that reports its own breakage in-band (`agy --output-format json`
+    answers `{"status":"ERROR","response":null}` and still exits 0) can't
+    have its error blob posted as a clean review.
+  - A failing `--llm-cmd` reports the tail of the command's own stdout, which
+    is where agent CLIs put their diagnosis — matching what the HTTP
+    transport already does with the provider's error body. (The command's
+    stderr is untouched and still streams through live.)
   - A one-shot fallback transport (`--fallback-base-url`/`--fallback-model`
     or `--fallback-llm-cmd`) tried once on primary failure, plus `--strict`
     for callers that want a hard failure instead of the advisory exit 0.
+    Either half of an HTTP fallback pair may be omitted and inherits the
+    primary's value.
   - `--format json` for machine-readable output (`reviewed`, `important`,
-    `nit`, `pre_existing`, `review`, `model`, `transport`, `fallback_used`).
+    `nit`, `pre_existing`, `review`, `model`, `transport`, `fallback_used`,
+    `failure`). `model`/`transport` describe the attempt that produced the
+    review and are null when none did; `failure` is null on a skip and
+    `{primary_error, fallback_error}` when every transport failed — so a
+    caller can tell "nothing to review" from "the review died".
+  - A provider HTTP error quotes the provider's own message (a retired model
+    id says so) instead of only guessing at the API key or credit balance.
 - **`review.yml` is now a thin wrapper.** It fetches `bin/panoptes` from this
   repo at the exact ref that is running (so a consumer pinned to `@v2` keeps
   getting the `@v2` engine) and shells out to it in `--pr --comment --format
